@@ -1,0 +1,32 @@
+[
+  {
+    "order_id": "ORD-12345",
+    "cliente": "juan.perez@email.com",
+    "fecha": "2026-03-18",
+    "estado": "Enviado",
+    "transportadora": "Servientrega",
+    "guia": "SERV-9988776655",
+    "total": 1200000,
+    "items": [
+      {
+        "producto_id": "bicicleta-urbana",
+        "cantidad": 1
+      }
+    ]
+  },
+  {
+    "order_id": "ORD-12346",
+    "cliente": "maria.gomez@email.com",
+    "fecha": "2026-03-20",
+    "estado": "Procesando",
+    "transportadora": "Inter Rapidísimo",
+    "guia": null,
+    "total": 350000,
+    "items": [
+      {
+        "producto_id": "audifonos-pro",
+        "cantidad": 1
+      }
+    ]
+  }
+]

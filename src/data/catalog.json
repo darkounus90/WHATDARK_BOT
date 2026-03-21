@@ -1,0 +1,36 @@
+[
+  {
+    "id": "bicicleta-urbana",
+    "nombre": "Bicicleta Urbana CityFly",
+    "categoria": "Deportes",
+    "descripcion_corta": "Bicicleta ligera ideal para moverse por la ciudad.",
+    "descripcion_larga": "La CityFly es perfecta para el día a día. Marco de aluminio, 7 velocidades, frenos V-brake y llantas de 700c. Soporta hasta 100kg.",
+    "precio": 1200000,
+    "stock": 15,
+    "colores": ["Negro", "Azul"],
+    "tags": ["bici", "bicicleta", "transporte", "urbana", "ciudad"]
+  },
+  {
+    "id": "audifonos-pro",
+    "nombre": "Audífonos Inalámbricos SoundPro",
+    "categoria": "Electrónica",
+    "descripcion_corta": "Audífonos con cancelación de ruido activa.",
+    "descripcion_larga": "Batería de 30 horas, cancelación de ruido profunda, Bluetooth 5.2. Ideales para trabajar o viajar.",
+    "precio": 350000,
+    "stock": 0,
+    "colores": ["Negro", "Blanco"],
+    "tags": ["audifonos", "sonido", "musica", "inalambrico", "bluetooth"]
+  },
+  {
+    "id": "botas-montana",
+    "nombre": "Botas de Montaña TrekX",
+    "categoria": "Calzado",
+    "descripcion_corta": "Botas impermeables para senderismo.",
+    "descripcion_larga": "Suela antideslizante, material Gore-Tex impermeable, ajuste ergonómico. Perfectas para largas caminatas en terrenos difíciles.",
+    "precio": 450000,
+    "stock": 30,
+    "colores": ["Marrón", "Gris"],
+    "tallas": [38, 39, 40, 41, 42],
+    "tags": ["botas", "zapatos", "senderismo", "montaña", "trekking"]
+  }
+]
