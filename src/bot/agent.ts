@@ -43,6 +43,12 @@ export async function handleUserMessage(sessionId: string, userText: string, med
 
     history.push({ role: 'user', content: contentPayload });
 
+    // PARCHE DE AUDITORIA: Prevenir Memory Leak recortando el historial. 
+    // Mantenemos siempre el System Prompt (index 0) y los últimos 14 mensajes para contexto.
+    if (history.length > 15) {
+        history.splice(1, history.length - 15);
+    }
+
     try {
         let aiResponse = await openai.chat.completions.create({
             model: config.OPENAI_MODEL,

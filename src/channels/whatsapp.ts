@@ -48,6 +48,16 @@ export function initWhatsApp() {
         if (isOldMessage) return;
 
         if (message.fromMe && !message.to.includes('@g.us') && !message.isStatus) {
+            
+            // PALABRA MÁGICA: Si el dueño escribe "!bot", reactiva el bot y oculta el mensaje
+            if (message.body.trim().toLowerCase() === '!bot') {
+                pausedChats.delete(message.to);
+                logger.info(`🤖 [BOT REACTIVADO] Has devuelto el chat ${message.to} al bot autónomo.`);
+                // Borrar el '!bot' para todos para que el cliente no lo lea
+                message.delete(true).catch(() => {});
+                return;
+            }
+
             // Si nuestro bot estaba a la mitad de responder a este chat y mandó un mensaje, lo ignoramos
             if (currentlyReplying.has(message.to)) {
                 return;

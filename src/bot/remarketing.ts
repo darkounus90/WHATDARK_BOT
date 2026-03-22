@@ -22,10 +22,13 @@ function loadData(): Record<string, ActivityRecord> {
     return {};
 }
 
-function saveData(data: Record<string, ActivityRecord>) {
+async function saveData(data: Record<string, ActivityRecord>) {
     const dir = path.dirname(DATA_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    // PARCHE DE AUDITORIA: Escritura asincrónica (Non-blocking I/O)
+    fs.promises.writeFile(DATA_FILE, JSON.stringify(data, null, 2)).catch(err => {
+        logger.error('Error crudo guardando el JSON asíncronamente:', err);
+    });
 }
 
 let activities = loadData();
@@ -43,6 +46,7 @@ export function recordUserActivity(userId: string) {
         // Si nos volvieron a escribir antes del remarketing, reseteamos el marcador
         activities[userId].remarketingSent = false;
     }
+    // No usamos await aquí porque es fire-and-forget
     saveData(activities);
 }
 
@@ -84,6 +88,6 @@ export function startRemarketingCron(client: Client) {
             }
         }
         
-        if (shouldSave) saveData(activities);
+        if (shouldSave) saveData(activities); // Guarda de fondo (asíncrono)
     }, 10 * 60 * 1000); // Revisa cada 10 minutos
 }
