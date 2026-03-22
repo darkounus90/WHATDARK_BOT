@@ -32,5 +32,16 @@
     "colores": ["Marrón", "Gris"],
     "tallas": [38, 39, 40, 41, 42],
     "tags": ["botas", "zapatos", "senderismo", "montaña", "trekking"]
+  },
+  {
+    "id": "l-treonato-magnesio",
+    "nombre": "L-Treonato de Magnesio Vida Sana",
+    "categoria": "Suplementos de Salud",
+    "descripcion_corta": "Magnesio premium desarrollado por el MIT para memoria, sueño profundo y estrés.",
+    "descripcion_larga": "Fórmula avanzada desarrollada en el MIT con 1000 mg de L-Treonato por porción (3 softgels). Único magnesio comprobado que eleva los niveles en el tejido cerebral. Beneficios: mejora la memoria, regula el cortisol (elimina estrés), y brinda sueño profundo. Sin efecto laxante. PRECIOS OFICIALES: 1 Tarro por $89.900 COP / 2 Tarros por $169.900 COP / 3 Tarros por $239.900 COP. Incluye pago contraentrega y envío gratis a toda Colombia (demora 2 a 4 días hábiles).",
+    "precio": 89900,
+    "stock": 100,
+    "colores": [],
+    "tags": ["magnesio", "treonato", "sueño", "dormir", "memoria", "estres", "cerebro", "suplemento", "vida sana", "pastillas"]
   }
 ]

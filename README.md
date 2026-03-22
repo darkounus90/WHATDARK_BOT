@@ -1,62 +1,22 @@
-# AI Bot para Ecommerce (WhatsApp)
+# 🤖 WHATDARK BOT - AI Ecommerce Assistant
 
-Bot conversacional impulsado por OpenAI (`gpt-4o-mini`) y `whatsapp-web.js` para automatizar la atención al cliente y ventas en tiendas virtuales.
+Bot inteligente para ventas en WhatsApp automatizado con Inteligencia Artificial Multimodal. Especializado en ventas directas, consultas de catálogo, reconocimiento visual de productos y cierres de venta automáticos con remarketing avanzado.
 
-## Requisitos
-- Node.js (v18 o superior recomendado)
-- Una clave API de OpenAI con créditos disponibles.
+## 🚀 Características Principales (Última Versión)
 
-## Instrucciones para levantar el proyecto localmente
+*   **🧠 IA "Andrés" Humanizada**: Prompt optimizado para conversar como un humano experto real, enviando respuestas cortas y persuasivas. 
+*   **👁️ Visión Artificial Integrada**: Completamente capaz de procesar e interpretar fotos (Base64) en tiempo real permitiendo al bot "ver" imágenes enviadas por clientes y relacionarlas con la tienda.
+*   **🛡️ Handover Humano Inteligente**: Sistema Anti-Colisión. Si el dueño del negocio responde manualmente desde su aplicación móvil de WhatsApp, el bot de IA lo detecta instantáneamente, cede el control y se **silencia permanentemente** para ese chat de forma silenciosa para no interrumpir la venta.
+*   **🕒 Protección Anti-Mensajes Fantasma (Sync-Safe)**: Mecanismo de seguridad con validación matemática de Timestamps (>30 Segundos = Basura). WhatsApp Web sincroniza historial al encender; el bot ignora selectivamente cualquier mensaje histórico para no saturarse y lee exclusivamente en tiempo real.
+*   **🔄 Motor de Remarketing Autónomo**: Una base de datos ligera \`data/remarketing.json\` rastrea independientemente las conversaciones de cada usuario. Ejecuta un "Cron Job" background. Si un usuario charla y abandona la compra por un tiempo predefinido, el bot dispara automáticamente una **oferta VIP prioritaria** y un cupón silencioso logrando altísimas tasas de recuperación.
+*   **🔌 Integración Proxy Multi-Modelo**: Adaptación nativa con endpoints no convencionales de LLM y proxies a través de un archivo `.env` personalizable (`OPENAI_BASE_URL`, `OPENAI_MODEL`). Totalmente testeado en la red **Claude 3.5 Sonnet** usando protocolos OpenAI.
 
-1. **Abre tu terminal** y navega a la carpeta del proyecto:
-   ```bash
-   cd C:\Users\PC\Documents\WhatsappBOT\ecommerce-bot
-   ```
+## 💻 Instalación y Despliegue en VPS
+El proyecto incluye un script de auto-arranque Windows Batch (`iniciar_bot_vps_windows.bat`) inteligente que autodetecta instalación, evita compilar de más, y asesina procesos zombies que pudiesen trabar SQLite o Chromium.
 
-2. **Instala las dependencias**:
-   ```bash
-   npm install
-   ```
+1.  Crear y configurar el archivo \`.env\` de variables obligatorias (\`OPENAI_API_KEY\`, \`OPENAI_BASE_URL\`, \`OPENAI_MODEL\`).
+2.  Configurar pre-catálogos en \`data/catalog.json\`.
+3.  Hacer doble-clic sobre \`iniciar_bot_vps_windows.bat\` y escanear el Código QR directamente desde la pantalla de consola negra.
 
-3. **Configura las variables de entorno**:
-   Abre el archivo `.env.example`, cópialo y renómbralo a `.env`. (O simplemente edita el existente y guárdalo como `.env`).
-   Asegúrate de agregar tu `OPENAI_API_KEY`:
-   ```bash
-   OPENAI_API_KEY=tu_clave_real_aqui_sk-...
-   STORE_NAME="Mi Tienda Online"
-   ```
-
-4. **Inicia el Bot en modo desarrollo**:
-   ```bash
-   npm run dev
-   ```
-
-5. **Escanea el Código QR**:
-   En la terminal aparecerá un código QR tras unos segundos. Abre WhatsApp en tu celular > Dispositivos vinculados > Vincular un dispositivo. Escanea este QR. 
-   Una vez escaneado, la terminal dirá "¡Cliente de WhatsApp conectado y listo...!"
-
-## Pruebas Manuales
-Para probar el bot, escríbele un mensaje desde OTRO número de WhatsApp hacia el número que vinculaste.
-Puedes probar el catálogo y los pedidos editando `src/data/catalog.json` y `src/data/orders.json`.
-Asegúrate de probar los 10 escenarios propuestos en el plan de implementación.
-
-## Despliegue Básico (Deploy en Producción)
-
-Dado que `whatsapp-web.js` ejecuta una instancia de Chromium, no se puede desplegar fácilmente en Serverless (Vercel/Netlify). La mejor opción es un VPS.
-
-1. **VPS (Ubuntu en DigitalOcean, AWS EC2, Linode)**:
-   - Instala Node.js, `npm` y Git en el VPS.
-   - Instala dependencias para Chromium: `sudo apt install -y gconf-service libgbm-dev libasound2 libatk1.0-0 libc6 libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 libgcc1 libgconf-2-4 libgdk-pixbuf2.0-0 libglib2.0-0 libgtk-3-0 libnspr4 libpango-1.0-0 libpangocairo-1.0-0 libstdc++6 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6 ca-certificates fonts-liberation libnss3 lsb-release xdg-utils wget.
-
-2. **Sube tu código y compila**:
-   ```bash
-   npm install
-   npm run build
-   ```
-
-3. **Ejecuta con PM2 (Manejo de procesos continuos)**:
-   ```bash
-   npm install -g pm2
-   pm2 start dist/app.js --name "whatsapp-bot"
-   ```
-   Con PM2 el bot se mantendrá activo 24/7 incluso si cierras la terminal SSH.
+---
+*Desarrollado y optimizado exhaustivamente con los mas altos estandares de desarrollo IA y software para operar 24/7 en alta demanda.*

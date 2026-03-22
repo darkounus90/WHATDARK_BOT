@@ -1,7 +1,7 @@
 @echo off
 title Iniciador del Bot de WhatsApp
 echo ========================================================
-echo   Ejecutor Inteligente del Bot (Para VPS Windows)
+echo   Ejecutor del Bot (Para VPS Windows)
 echo ========================================================
 echo.
 
@@ -19,12 +19,9 @@ IF NOT EXIST "node_modules\" (
     echo.
 )
 
-echo [*] Iniciando el Bot de WhatsApp...
-echo Intentando iniciar con PM2...
-call pm2 start dist/app.js --name "whatsapp-bot" >nul 2>&1
-
+echo [*] Iniciando el Bot de WhatsApp en primer plano...
+echo Recuerda NO cerrar esta ventana negra.
 echo.
-echo Si ves que la consola se detiene aqui, el bot arrancara en esta ventana:
 node dist/app.js
 
 pause

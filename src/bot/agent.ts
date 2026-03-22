@@ -5,7 +5,8 @@ import { SYSTEM_PROMPT } from './prompts';
 import { botTools, executeTool } from './tools';
 
 const openai = new OpenAI({
-    apiKey: config.OPENAI_API_KEY
+    apiKey: config.OPENAI_API_KEY,
+    baseURL: config.OPENAI_BASE_URL || undefined
 });
 
 // Mapa para guardar el historial de la sesión en memoria
@@ -28,15 +29,23 @@ function getOrCreateSession(sessionId: string): OpenAI.Chat.ChatCompletionMessag
 /**
  * Función principal para procesar el mensaje de un usuario.
  */
-export async function handleUserMessage(sessionId: string, userText: string): Promise<string> {
+export async function handleUserMessage(sessionId: string, userText: string, media?: {mimetype: string, data: string}): Promise<string> {
     const history = getOrCreateSession(sessionId);
     
-    // Agregar el mensaje del usuario al historial
-    history.push({ role: 'user', content: userText });
+    // Agregar el mensaje del usuario al historial (soporte para imágenes)
+    let contentPayload: any = userText || "Revísalo por favor.";
+    if (media) {
+        contentPayload = [
+            { type: "text", text: userText || "¿Me puedes decir qué ves en esta foto conectándolo con la tienda?" },
+            { type: "image_url", image_url: { url: `data:${media.mimetype};base64,${media.data}` } }
+        ];
+    }
+
+    history.push({ role: 'user', content: contentPayload });
 
     try {
         let aiResponse = await openai.chat.completions.create({
-            model: 'gpt-4o-mini', // Usamos 4o-mini por rapidez y costo
+            model: config.OPENAI_MODEL,
             messages: history,
             tools: botTools,
             tool_choice: 'auto'
@@ -67,7 +76,7 @@ export async function handleUserMessage(sessionId: string, userText: string): Pr
 
             // Llamamos a OpenAI de nuevo con los resultados de las tools
             aiResponse = await openai.chat.completions.create({
-                model: 'gpt-4o-mini',
+                model: config.OPENAI_MODEL,
                 messages: history,
                 tools: botTools, // Seguimos pasándolas por si necesita usar otra
                 tool_choice: 'auto'

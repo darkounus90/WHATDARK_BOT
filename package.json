@@ -12,7 +12,7 @@
     "dotenv": "^16.4.5",
     "openai": "^4.29.0",
     "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "^1.23.0"
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
