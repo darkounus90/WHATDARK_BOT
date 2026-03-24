@@ -1,124 +1,108 @@
-import { Client, LocalAuth } from 'whatsapp-web.js';
-import qrcode from 'qrcode-terminal';
+import { Router, Request, Response } from 'express';
+import axios from 'axios';
 import { logger } from '../utils/logger';
+import { config } from '../config/env';
 import { handleUserMessage } from '../bot/agent';
-import { recordUserActivity, startRemarketingCron } from '../bot/remarketing';
+import { recordUserActivity } from '../bot/remarketing';
 
-// Set para guardar los chats donde intervino un humano y el bot debe callarse
+export const whatsappRouter = Router();
+
 const pausedChats = new Set<string>();
 const currentlyReplying = new Set<string>();
 
-// Inicializamos el cliente de WhatsApp
-// LocalAuth guarda la sesión en caché para no pedir el QR en cada reinicio
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        // Reducimos el peso de Chromium
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    },
-    webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
+// 1. Verificación del Webhook de Meta
+whatsappRouter.get('/', (req: Request, res: Response) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    if (mode === 'subscribe' && token === config.META_VERIFY_TOKEN) {
+        logger.info('Webhook verificado exitosamente por Meta.');
+        res.status(200).send(challenge);
+    } else {
+        res.sendStatus(403);
     }
 });
 
-export function initWhatsApp() {
-    client.on('qr', (qr) => {
-        logger.info('Escanea el siguiente código QR con tu WhatsApp para iniciar sesión:');
-        qrcode.generate(qr, { small: true });
-    });
+// 2. Recepción de mensajes entrantes (POST Webhook)
+whatsappRouter.post('/', async (req: Request, res: Response) => {
+    // Retornar 200 inmediatamente para evitar retries de Meta (Timeouts limitados a pocos segundos)
+    res.sendStatus(200);
 
-    client.on('ready', () => {
-        logger.info('¡Cliente de WhatsApp conectado y listo para recibir mensajes!');
-        startRemarketingCron(client);
-    });
+    try {
+        const body = req.body;
 
-    client.on('authenticated', () => {
-        logger.info('Autenticación exitosa.');
-    });
-
-    client.on('auth_failure', (msg) => {
-        logger.error('Error de autenticación', msg);
-    });
-
-    // Detectar si el dueño del bot contesta desde su celular (Handover Humano)
-    client.on('message_create', async (message) => {
-        // Ignorar mensajes del pasado que WhatsApp sincroniza de golpe al encender
-        const isOldMessage = (Date.now() - (message.timestamp * 1000)) > 30000;
-        if (isOldMessage) return;
-
-        if (message.fromMe && !message.to.includes('@g.us') && !message.isStatus) {
+        if (body.object === 'whatsapp_business_account' && 
+            body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
             
-            // PALABRA MÁGICA: Si el dueño escribe "!bot", reactiva el bot y oculta el mensaje
-            if (message.body.trim().toLowerCase() === '!bot') {
-                pausedChats.delete(message.to);
-                logger.info(`🤖 [BOT REACTIVADO] Has devuelto el chat ${message.to} al bot autónomo.`);
-                // Borrar el '!bot' para todos para que el cliente no lo lea
-                message.delete(true).catch(() => {});
+            const message = body.entry[0].changes[0].value.messages[0];
+            const senderPhone = message.from;
+            
+            // Si no es texto (imágenes sin texto, notas de voz, etc.), por ahora guardamos texto vacío
+            let userText = message.text?.body || '';
+
+            // Handover Humano
+            if (userText.trim().toLowerCase() === '!bot') {
+                pausedChats.delete(senderPhone);
+                logger.info(`🤖 [BOT REACTIVADO] El bot vuelve a tomar el control con ${senderPhone}.`);
+                await sendWhatsAppMessage(senderPhone, "Bot reactivado correctamente. ¿En qué te puedo ayudar?");
                 return;
             }
 
-            // Si nuestro bot estaba a la mitad de responder a este chat y mandó un mensaje, lo ignoramos
-            if (currentlyReplying.has(message.to)) {
-                return;
-            }
+            // Ignorar si el bot está pausado temporal o permanentemente
+            if (pausedChats.has(senderPhone)) return;
+            if (currentlyReplying.has(senderPhone)) return;
 
-            if (!pausedChats.has(message.to)) {
-                logger.info(`[HUMANO] Asesor detectado respondiendo a ${message.to}. El bot se pausará silenciosamente para este chat.`);
-                pausedChats.add(message.to);
-            }
+            logger.info(`📩 Nuevo mensaje de ${senderPhone}: ${userText}`);
+
+            // Registrar actividad
+            recordUserActivity(senderPhone);
+
+            // Bloqueamos el envio asincrono temporalmente
+            currentlyReplying.add(senderPhone);
+
+            // TODO: Podríamos descargar imágenes leyendo el media URL que envía Meta
+            const mediaData = undefined;
+
+            // Procesar con el Agente AI
+            const aiResponse = await handleUserMessage(senderPhone, userText, mediaData);
+
+            // Enviar respuesta al chat
+            await sendWhatsAppMessage(senderPhone, aiResponse);
+
+            // Liberamos el semáforo para nuevos mensajes
+            currentlyReplying.delete(senderPhone);
         }
-    });
+    } catch (error: any) {
+        logger.error(`Error grave en webhook de WhatsApp: ${error.message}`);
+    }
+});
 
-    client.on('message', async (message) => {
-        try {
-            // Ignorar mensajes viejos del historial igual que arriba
-            const isOldMessage = (Date.now() - (message.timestamp * 1000)) > 30000;
-            if (isOldMessage) return;
+// 3. Función auxiliar para mandar el mensaje saliente apuntando a la Cloud API
+export async function sendWhatsAppMessage(to: string, text: string) {
+    if (!config.META_ACCESS_TOKEN || !config.META_PHONE_ID) {
+        logger.error("❌ Faltan credenciales de Meta (Access Token o Phone ID) en las variables de entorno.");
+        return;
+    }
 
-            // Ignoramos mensajes de grupos y estados, solo chats directos
-            if (message.isStatus || message.from.includes('@g.us')) return;
-
-            // Si un humano tomó el control, el bot ignora el mensaje
-            if (pausedChats.has(message.from)) return;
-
-            logger.info(`Mensaje recibido de ${message.from}: ${message.body || '[Contenido Multimedia]'}`);
-
-            // Registramos la actividad del usuario para el motor de remarketing
-            recordUserActivity(message.from);
-
-            // Mostrar "escribiendo..."
-            const chat = await message.getChat();
-            await chat.sendStateTyping();
-
-            // Descargar imagen si existe
-            let mediaData = undefined;
-            if (message.hasMedia) {
-                const media = await message.downloadMedia();
-                if (media && media.mimetype.includes('image')) {
-                    logger.info(`📸 Imagen detectada y descargada de ${message.from}`);
-                    mediaData = { mimetype: media.mimetype, data: media.data };
-                }
+    try {
+        await axios({
+            method: 'POST',
+            url: `https://graph.facebook.com/v19.0/${config.META_PHONE_ID}/messages`,
+            headers: {
+                Authorization: `Bearer ${config.META_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json',
+            },
+            data: {
+                messaging_product: 'whatsapp',
+                recipient_type: 'individual',
+                to: to,
+                type: 'text',
+                text: { body: text }
             }
-
-            // Procesar el mensaje a través de nuestro agente de IA
-            const aiResponse = await handleUserMessage(message.from, message.body, mediaData);
-
-            // Enviar la respuesta
-            currentlyReplying.add(message.from);
-            await client.sendMessage(message.from, aiResponse);
-            
-            // Liberamos el candado en 5 segundos, tiempo suficiente para que salte el evento message_create de whatsapp-web.js
-            setTimeout(() => currentlyReplying.delete(message.from), 5000);
-
-            // Finalizar estado de "escribiendo"
-            await chat.clearState();
-
-        } catch (error: any) {
-            logger.error(`Error procesando mensaje de ${message.from}: ${error.message}`);
-            // NOTA: Eliminamos el mensaje de error al cliente para no hacerle spam si la API falla 
-        }
-    });
-
-    client.initialize();
+        });
+        logger.info(`✅ Respuesta de IA enviada a ${to}`);
+    } catch (error: any) {
+        logger.error(`❌ Error HTTP enviando a ${to}: ${error.response?.data?.error?.message || error.message}`);
+    }
 }

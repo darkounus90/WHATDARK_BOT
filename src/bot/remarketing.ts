@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { Client } from 'whatsapp-web.js';
 import { logger } from '../utils/logger';
 
 interface ActivityRecord {
@@ -53,7 +52,7 @@ export function recordUserActivity(userId: string) {
 /**
  * Arranca el temporizador de fondo. Revisa constantemente a quién hay que escribirle de nuevo.
  */
-export function startRemarketingCron(client: Client) {
+export function startRemarketingCron(sendFunc: (to: string, msg: string) => Promise<void>) {
     logger.info("⏰ Motor de Remarketing INICIADO (Buscando carritos abandonados cada 10 minutos...)");
     
     // El bot se despierta cada 10 minutos a revisar la lista entera
@@ -78,7 +77,7 @@ export function startRemarketingCron(client: Client) {
                     
                     const msg = "¡Hola! Pasaba a saludarte rapidito 👋. Oye, como estuvimos hablando hace un rato del L-Treonato de Magnesio y me caíste súper bien, acabo de hablar con mi jefe. Me autorizó a darte ✨ prioridad VIP ✨ en el despacho si dejas tu pedido listo hoy mismo (Sale enseguida y el envío te sale 100% gratis). ¿Te lo pido de una vez? 💊";
                     
-                    await client.sendMessage(userId, msg);
+                    await sendFunc(userId, msg);
                     
                     activities[userId].remarketingSent = true;
                     shouldSave = true;
