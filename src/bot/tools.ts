@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { searchProducts, getProductById } from '../data/catalog';
+import { searchProducts, getProductById, getAllProducts } from '../data/catalog';
 import { getOrderById } from '../data/orders';
 import { logger } from '../utils/logger';
 
@@ -18,6 +18,18 @@ export const botTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
                     }
                 },
                 required: ['query']
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'list_all_products',
+            description: 'Obtiene la lista completa de todos los productos disponibles en la tienda. Úsalo cuando el cliente pregunte "qué productos tienes" o si quieres ver todo el catálogo para recomendar algo.',
+            parameters: {
+                type: 'object',
+                properties: {},
+                required: []
             }
         }
     },
@@ -58,8 +70,8 @@ export const botTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     {
         type: 'function',
         function: {
-            name: 'add_to_cart_link',
-            description: 'Genera un link directo de checkout o carrito para un producto, útil cuando el cliente ya decide comprar.',
+            name: 'generate_payment_link',
+            description: 'Genera un link de pago seguro (Stripe/MercadoPago) para un producto. Úsalo SÓLO cuando el cliente quiera pagar con tarjeta.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -74,30 +86,44 @@ export const botTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     }
 ];
 
-export async function executeTool(name: string, args: any): Promise<string> {
+export async function executeTool(name: string, args: any, storeId: string, senderPhone: string): Promise<string> {
     logger.info(`Ejecutando tool: ${name}`, args);
     try {
         switch (name) {
             case 'search_products':
-                const products = await searchProducts(args.query);
-                if (products.length === 0) return JSON.stringify({ error: "No se encontraron productos para esta búsqueda." });
+                const products = await searchProducts(args.query, storeId);
+                if (products.length === 0) {
+                    const allProd = await getAllProducts(storeId);
+                    if (allProd.length > 0) {
+                        return JSON.stringify({ 
+                            nota: "No hay coincidencias exactas para esa palabra, pero aquí tienes otros productos disponibles en la tienda para que analices si alguno le sirve:", 
+                            productos: allProd.slice(0, 10) 
+                        });
+                    }
+                    return JSON.stringify({ error: "No se encontraron productos y el catálogo está vacío." });
+                }
                 return JSON.stringify(products);
+                
+            case 'list_all_products':
+                const all = await getAllProducts(storeId);
+                return JSON.stringify(all);
             
             case 'get_product_details':
-                const product = await getProductById(args.id);
+                const product = await getProductById(args.id, storeId);
                 if (!product) return JSON.stringify({ error: "No se encontró el producto con ese ID." });
                 return JSON.stringify(product);
-
+ 
             case 'get_order_status':
-                const order = await getOrderById(args.order_id);
-                if (!order) return JSON.stringify({ error: "No se encontró la orden con ese ID. Asegúrate de que el formato sea ORD-XXXXX." });
+                const order = await getOrderById(args.order_id, senderPhone);
+                if (!order) return JSON.stringify({ error: "No se encontró la orden con ese ID o no pertenece a tu número de teléfono." });
                 return JSON.stringify(order);
-
-            case 'add_to_cart_link':
-                // Mapeamos el ID a un link simulado (en el futuro esto será de la API del Ecommerce real)
+ 
+            case 'generate_payment_link':
+                // Simulamos un enlace seguro de Stripe o MercadoPago para cumplir con PCI-DSS
                 return JSON.stringify({
                     success: true,
-                    link: `https://mitienda.com/checkout?product=${args.product_id}`
+                    link: `https://pagos.mitienda.com/checkout-seguro?item=${args.product_id}&gateway=stripe`,
+                    instructions_for_ai: "IMPORTANTE: NO expliques el proceso de pago paso a paso. Envía EXACTAMENTE este aviso al cliente, sin modificarlo: '⚠️ Aviso importante sobre el pago: El proceso de pago se realiza en nuestra plataforma segura. Haz clic en el enlace y sigue las instrucciones que aparecen en pantalla. Por tu seguridad, NUNCA compartas los datos de tu tarjeta por este chat. Si tienes problemas con el pago, contáctanos por este mismo medio y te ayudaremos. 🔒'"
                 });
 
             default:

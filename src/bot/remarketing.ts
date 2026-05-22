@@ -1,92 +1,145 @@
-import fs from 'fs';
-import path from 'path';
 import { logger } from '../utils/logger';
+import { db } from '../data/connection';
+import { sessions, stores } from '../data/schema';
+import { eq, and, lte, gte } from 'drizzle-orm';
+import { getMemory, saveMemory } from '../data/database';
+import { getAllProducts } from '../data/catalog';
+import OpenAI from 'openai';
+import { config } from '../config/env';
 
-interface ActivityRecord {
-    lastMessageAt: number;
-    remarketingSent: boolean;
-}
+async function generateRemarketingMessage(
+    storeId: string,
+    systemPrompt: string,
+    apiKey: string,
+    history: OpenAI.Chat.ChatCompletionMessageParam[]
+): Promise<string> {
+    const products = await getAllProducts(storeId);
+    const catalogLines = products.map(p => {
+        const price = p.price != null ? `$${p.price}` : 'consultar precio';
+        const url = p.checkoutUrl ? ` | Link: ${p.checkoutUrl}` : '';
+        return `- ${p.name} — ${price}${url}`;
+    }).join('\n');
 
-// Guardaremos los clics y tiempos en un archivito JSON para que no se pierdan si el VPS se reinicia
-const DATA_FILE = path.join(__dirname, '../../data/remarketing.json');
+    const remarketingInstruction = `Eres un asistente de ventas. El cliente con quien estuviste hablando no ha vuelto a escribir en varias horas.
+Tu tarea es escribir UN SOLO mensaje de seguimiento natural, personalizado y persuasivo para recuperar su interés.
+El mensaje debe:
+- Basarse en el contexto de la conversación anterior (qué preguntó, qué le interesó)
+- Adaptarse al tipo de producto/servicio que vende la tienda (infoproducto, físico, servicio, etc.)
+- Sonar humano y cercano, NO genérico ni de plantilla
+- Incluir una llamada a la acción clara
+- Ser breve (máximo 3-4 líneas)
+NO menciones envíos físicos ni despachos si son productos digitales.
 
-function loadData(): Record<string, ActivityRecord> {
-    if (fs.existsSync(DATA_FILE)) {
-        try {
-            return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-        } catch(e) {
-            return {};
-        }
-    }
-    return {};
-}
+Información de la tienda:
+${systemPrompt}
 
-async function saveData(data: Record<string, ActivityRecord>) {
-    const dir = path.dirname(DATA_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    // PARCHE DE AUDITORIA: Escritura asincrónica (Non-blocking I/O)
-    fs.promises.writeFile(DATA_FILE, JSON.stringify(data, null, 2)).catch(err => {
-        logger.error('Error crudo guardando el JSON asíncronamente:', err);
+${catalogLines ? `Catálogo:\n${catalogLines}` : ''}
+
+Escribe ÚNICAMENTE el mensaje, sin explicaciones ni comillas.`;
+
+    const openai = new OpenAI({
+        apiKey,
+        baseURL: config.OPENAI_BASE_URL || undefined
     });
-}
 
-let activities = loadData();
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        { role: 'system', content: remarketingInstruction },
+        ...history.filter(m => m.role === 'user' || (m.role === 'assistant' && typeof m.content === 'string')).slice(-6)
+    ];
+
+    const response = await openai.chat.completions.create({
+        model: 'gemini-2.5-flash-lite',
+        messages
+    });
+
+    return response.choices[0].message.content || '';
+}
 
 /**
  * Registra o actualiza la última vez que el usuario nos mandó un mensaje
  */
-export function recordUserActivity(userId: string) {
-    if (userId.includes('@g.us')) return; // No remarketing a grupos
+export async function recordUserActivity(sessionId: string) {
+    if (sessionId.includes('@g.us')) return; // No remarketing a grupos
 
-    if (!activities[userId]) {
-        activities[userId] = { lastMessageAt: Date.now(), remarketingSent: false };
-    } else {
-        activities[userId].lastMessageAt = Date.now();
-        // Si nos volvieron a escribir antes del remarketing, reseteamos el marcador
-        activities[userId].remarketingSent = false;
+    try {
+        await db.update(sessions)
+            .set({ 
+                lastMessageAt: new Date(),
+                remarketingSent: false 
+            })
+            .where(eq(sessions.sessionId, sessionId));
+    } catch (error: any) {
+        logger.error(`Error actualizando actividad para ${sessionId}: ${error.message}`);
     }
-    // No usamos await aquí porque es fire-and-forget
-    saveData(activities);
 }
 
 /**
  * Arranca el temporizador de fondo. Revisa constantemente a quién hay que escribirle de nuevo.
  */
-export function startRemarketingCron(sendFunc: (to: string, msg: string) => Promise<void>) {
-    logger.info("⏰ Motor de Remarketing INICIADO (Buscando carritos abandonados cada 10 minutos...)");
-    
-    // El bot se despierta cada 10 minutos a revisar la lista entera
+export function startRemarketingCron(sendFunc: (storeId: string, to: string, msg: string) => Promise<void>) {
+    logger.info("⏰ Motor de Remarketing INICIADO en PostgreSQL (Buscando carritos abandonados cada 10 minutos...)");
+
     setInterval(async () => {
-        const now = Date.now();
-        
-        // TIEMPO PARA DETONAR EL REMARKETING: 2 Horas (en milisegundos)
-        const WAITING_TIME_MS = 2 * 60 * 60 * 1000; 
-        
-        // TIEMPO DE EXPIRACIÓN: Si ya pasaron más de 48 horas, se rinde y no le escribe nada para no hacer spam.
-        const MAXIMUM_WAIT_TIME_MS = 48 * 60 * 60 * 1000;
+        try {
+            const now = new Date();
+            
+            // Calculamos las fechas límites
+            // Entre 2 horas y 48 horas atrás
+            const twoHoursAgo = new Date(now.getTime() - (2 * 60 * 60 * 1000));
+            const fortyEightHoursAgo = new Date(now.getTime() - (48 * 60 * 60 * 1000));
 
-        let shouldSave = false;
+            // Buscamos sesiones en la base de datos
+            const pendingSessions = await db.query.sessions.findMany({
+                where: and(
+                    eq(sessions.remarketingSent, false),
+                    lte(sessions.lastMessageAt, twoHoursAgo),
+                    gte(sessions.lastMessageAt, fortyEightHoursAgo)
+                )
+            });
 
-        for (const [userId, record] of Object.entries(activities)) {
-            const timeSinceLastMessage = now - record.lastMessageAt;
-
-            // Condición: No se le ha mandado el mensaje, lleva más de 2 horas en silencio y menos de 48.
-            if (!record.remarketingSent && timeSinceLastMessage > WAITING_TIME_MS && timeSinceLastMessage < MAXIMUM_WAIT_TIME_MS) {
+            for (const record of pendingSessions) {
                 try {
-                    logger.info(`🔥 TRABAJO AUTOMÁTICO: Disparando mensaje de Remarketing a ${userId}...`);
+                    const sessionId = record.sessionId;
+                    const underscoreIdx = sessionId.indexOf('_');
+                    if (underscoreIdx === -1) continue;
                     
-                    const msg = "¡Hola! Pasaba a saludarte rapidito 👋. Oye, como estuvimos hablando hace un rato del L-Treonato de Magnesio y me caíste súper bien, acabo de hablar con mi jefe. Me autorizó a darte ✨ prioridad VIP ✨ en el despacho si dejas tu pedido listo hoy mismo (Sale enseguida y el envío te sale 100% gratis). ¿Te lo pido de una vez? 💊";
-                    
-                    await sendFunc(userId, msg);
-                    
-                    activities[userId].remarketingSent = true;
-                    shouldSave = true;
+                    const storeId = sessionId.substring(0, underscoreIdx);
+                    const phone = sessionId.substring(underscoreIdx + 1);
+
+                    const store = await db.query.stores.findFirst({ where: eq(stores.id, storeId) });
+                    if (!store) continue;
+
+                    const history = await getMemory(sessionId) || [];
+                    const apiKey = store.openaiApiKey || config.OPENAI_API_KEY;
+
+                    logger.info(`🔥 TRABAJO AUTOMÁTICO: Disparando mensaje de Remarketing a ${phone} (tienda: ${storeId})...`);
+
+                    let msg: string;
+                    try {
+                        msg = await generateRemarketingMessage(storeId, store.systemPrompt, apiKey, history);
+                    } catch (aiError: any) {
+                        logger.error(`Error generando mensaje de remarketing con IA: ${aiError.message}`);
+                        continue;
+                    }
+
+                    if (!msg) continue;
+
+                    await sendFunc(storeId, phone, msg);
+
+                    history.push({ role: 'assistant', content: msg });
+                    await saveMemory(sessionId, storeId, phone, history);
+
+                    // Marcamos como enviado en la DB
+                    await db.update(sessions)
+                        .set({ remarketingSent: true })
+                        .where(eq(sessions.sessionId, sessionId));
+                        
                 } catch (error) {
-                    logger.error(`Error enviando remarketing a ${userId}:`, error);
+                    logger.error(`Error enviando remarketing a ${record.sessionId}:`, error);
                 }
             }
+        } catch (dbError: any) {
+            logger.error(`Error en cron de remarketing: ${dbError.message}`);
         }
-        
-        if (shouldSave) saveData(activities); // Guarda de fondo (asíncrono)
-    }, 10 * 60 * 1000); // Revisa cada 10 minutos
+    }, 10 * 60 * 1000);
 }

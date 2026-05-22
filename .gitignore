@@ -3,3 +3,21 @@ dist/
 .env
 .DS_Store
 *.log
+data/database.sqlite
+data/
+
+# WhatsApp Web Session Cache
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Agent/IDE directories
+.agent/
+.agents/
+.continue/
+skills/
+skills-lock.json
+
+# Scratch / Local Files
+headers.txt
+scratch_alter.ts
+test-models.mjs

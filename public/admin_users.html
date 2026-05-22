@@ -1,0 +1,130 @@
+<!DOCTYPE Superadmin Users>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>SuperAdmin - Gestión de Usuarios</title>
+    <style>
+        body { font-family: system-ui, sans-serif; padding: 2rem; background: #f4f4f5; color: #18181b; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        h1 { margin-top: 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #e4e4e7; }
+        th { background: #f4f4f5; font-weight: 600; }
+        button { background: #000; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
+        button.danger { background: #ef4444; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        input, select { width: 100%; padding: 0.5rem; border: 1px solid #d4d4d8; border-radius: 4px; }
+        .card { border: 1px solid #e4e4e7; padding: 1rem; border-radius: 8px; margin-bottom: 2rem; background: #fafafa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Gestión de Usuarios (SuperAdmin)</h1>
+        <p><a href="/dashboard">Volver al Dashboard</a></p>
+        
+        <div class="card">
+            <h3>Crear Nuevo Usuario</h3>
+            <form id="createUserForm">
+                <div class="form-group">
+                    <label>Usuario</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="password" required>
+                </div>
+                <div class="form-group">
+                    <label>ID de la Tienda (Debe existir previamente en el sistema)</label>
+                    <input type="text" id="storeId" required placeholder="Ej: tienda_01">
+                </div>
+                <div class="form-group">
+                    <label>Rol</label>
+                    <select id="role">
+                        <option value="store_owner">Dueño de Tienda (Store Owner)</option>
+                        <option value="superadmin">SuperAdmin</option>
+                    </select>
+                </div>
+                <button type="submit">Crear Usuario</button>
+            </form>
+        </div>
+
+        <h3>Usuarios Existentes</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Usuario</th>
+                    <th>Tienda (storeId)</th>
+                    <th>Rol</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="usersTable">
+                <!-- Data loaded via JS -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function fetchUsers() {
+            try {
+                const res = await fetch('/api/users');
+                if (res.status === 403) {
+                    alert('No tienes permiso para ver esta página. Ingresa con credenciales de superadmin.');
+                    window.location.href = '/dashboard';
+                    return;
+                }
+                const users = await res.json();
+                const tbody = document.getElementById('usersTable');
+                tbody.innerHTML = '';
+                
+                users.forEach(u => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${u.username}</td>
+                        <td>${u.storeId || 'N/A'}</td>
+                        <td>${u.role}</td>
+                        <td><button class="danger" onclick="deleteUser('${u.id}')">Eliminar</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('¿Seguro que deseas eliminar este usuario?')) return;
+            await fetch(`/api/users/${id}`, { method: 'DELETE' });
+            fetchUsers();
+        }
+
+        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value,
+                storeId: document.getElementById('storeId').value,
+                role: document.getElementById('role').value
+            };
+
+            const res = await fetch('/api/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                alert('Usuario creado con éxito');
+                document.getElementById('createUserForm').reset();
+                fetchUsers();
+            } else {
+                const err = await res.json();
+                alert('Error: ' + err.error);
+            }
+        });
+
+        fetchUsers();
+    </script>
+</body>
+</html>

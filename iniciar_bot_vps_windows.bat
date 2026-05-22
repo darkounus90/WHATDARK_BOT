@@ -10,14 +10,11 @@ IF NOT EXIST "node_modules\" (
     echo Procediendo a instalar dependencias por primera vez...
     call npm install
     echo.
-    
-    echo [*] Compilando el codigo...
-    call npm run build
-    echo.
-) ELSE (
-    echo [*] Todo esta instalado, arrancando directamente.
-    echo.
 )
+
+echo [*] Compilando el codigo para aplicar los ultimos cambios...
+call npm run build
+echo.
 
 echo [*] Iniciando el Bot de WhatsApp en primer plano...
 echo Recuerda NO cerrar esta ventana negra.

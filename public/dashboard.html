@@ -1,0 +1,1702 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - E-Commerce Bot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --bg: #0B0F19;
+            --panel: #151C2C;
+            --panel2: #1E293B;
+            --border: #2A3441;
+            --brand: #10b981;
+            --brand-dark: #059669;
+            --brand-glow: rgba(16, 185, 129, 0.15);
+            --red: #ef4444;
+            --red-glow: rgba(239, 68, 68, 0.15);
+            --yellow: #f59e0b;
+            --text: #F8FAFC;
+            --text2: #94A3B8;
+            --text3: #64748B;
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: var(--bg);
+            color: var(--text); 
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ───── GLASS ───── */
+        .glass {
+            background: rgba(21, 28, 44, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* ───── HEADER ───── */
+        header {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            z-index: 20;
+        }
+        .logo { display: flex; align-items: center; gap: 12px; }
+        .logo-icon {
+            width: 36px; height: 36px; border-radius: 10px;
+            background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 14px rgba(16,185,129,0.25);
+        }
+        .logo-icon i { font-size: 20px; color: #fff; }
+        .logo-text h1 { font-size: 16px; font-weight: 700; }
+        .logo-text span { font-size: 10px; color: var(--brand); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
+
+        /* ───── TAB BAR ───── */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 4px;
+        }
+        .tab-btn {
+            padding: 8px 20px;
+            border: none;
+            background: transparent;
+            color: var(--text3);
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'Inter', sans-serif;
+        }
+        .tab-btn:hover { color: var(--text2); background: rgba(255,255,255,0.03); }
+        .tab-btn.active { 
+            color: var(--text); 
+            background: var(--panel2); 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .tab-btn .badge {
+            background: var(--brand);
+            color: #fff;
+            font-size: 10px;
+            padding: 1px 7px;
+            border-radius: 99px;
+            font-weight: 700;
+        }
+
+        /* ───── HEADER ACTIONS ───── */
+        .header-actions { display: flex; align-items: center; gap: 8px; }
+        .btn-icon {
+            width: 36px; height: 36px; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.03);
+            color: var(--text2);
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+            font-size: 18px;
+        }
+        .btn-icon:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
+        /* ───── MAIN CONTENT ───── */
+        main {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+        .tab-page { display: none; height: 100%; }
+        .tab-page.active { display: flex; }
+
+        /* ───── CHATS TAB ───── */
+        .chat-layout { display: flex; width: 100%; height: 100%; }
+        .sidebar {
+            width: 320px;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .sidebar-search {
+            padding: 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .sidebar-search input {
+            width: 100%;
+            padding: 10px 14px 10px 36px;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 13px;
+            outline: none;
+            font-family: 'Inter', sans-serif;
+        }
+        .sidebar-search input:focus { border-color: var(--brand); }
+        .sidebar-search { position: relative; }
+        .sidebar-search i { position: absolute; left: 28px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 16px; }
+        .sessions-list { flex: 1; overflow-y: auto; }
+
+        .session-item {
+            padding: 14px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            border-left: 3px solid transparent;
+            transition: all 0.15s;
+        }
+        .session-item:hover { background: rgba(255,255,255,0.02); border-left-color: var(--brand); }
+        .session-item.active { background: var(--brand-glow); border-left-color: var(--brand); }
+        .session-item .top { display: flex; justify-content: space-between; align-items: center; }
+        .session-item .phone { font-size: 13px; font-weight: 600; color: var(--text); }
+        .session-item .time { font-size: 10px; color: var(--text3); }
+        .session-item .preview { font-size: 12px; color: var(--text3); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Chat Area */
+        .chat-area { flex: 1; display: flex; flex-direction: column; }
+        .chat-header {
+            height: 60px;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .chat-header .avatar {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: var(--panel2);
+            border: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .chat-header .avatar i { font-size: 20px; color: var(--brand); }
+        .chat-header .info h3 { font-size: 14px; font-weight: 600; }
+        .chat-header .info span { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 4px; }
+        .chat-header .info .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 8px rgba(16,185,129,0.7); }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .chat-input-area {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            background: rgba(0,0,0,0.1);
+        }
+        .chat-input-area input {
+            flex: 1;
+            padding: 12px 16px;
+            background: var(--panel2);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            color: var(--text);
+            outline: none;
+            font-family: 'Inter', sans-serif;
+        }
+        .chat-input-area input:focus { border-color: var(--brand); }
+        .chat-input-area button {
+            background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+            color: #fff;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 14px rgba(16,185,129,0.25);
+        }
+        .chat-input-area button:hover { transform: translateY(-2px); }
+
+        .msg { max-width: 70%; padding: 12px 16px; border-radius: 16px; font-size: 13px; line-height: 1.5; animation: fadeIn 0.25s ease-out; }
+        .msg.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+            color: #fff;
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 4px 12px rgba(16,185,129,0.2);
+        }
+        .msg.assistant {
+            align-self: flex-start;
+            background: var(--panel2);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-bottom-left-radius: 4px;
+        }
+        .msg.tool-msg {
+            align-self: center;
+            background: rgba(0,0,0,0.3);
+            border: 1px dashed rgba(255,255,255,0.1);
+            color: var(--text3);
+            font-size: 11px;
+            padding: 6px 14px;
+            border-radius: 99px;
+            display: flex; align-items: center; gap: 6px;
+        }
+
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text3);
+        }
+        .empty-icon {
+            width: 80px; height: 80px; border-radius: 20px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 16px;
+        }
+        .empty-icon i { font-size: 36px; color: var(--text3); }
+        .empty-state h3 { font-size: 16px; color: var(--text); margin-bottom: 6px; }
+        .empty-state p { font-size: 13px; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ───── PRODUCTS TAB ───── */
+        .products-layout { width: 100%; display: flex; flex-direction: column; overflow: hidden; }
+        .products-toolbar {
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .products-toolbar h2 { font-size: 16px; font-weight: 600; }
+        .btn-primary {
+            padding: 9px 18px;
+            background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s;
+            box-shadow: 0 4px 14px rgba(16,185,129,0.25);
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(16,185,129,0.35); }
+
+        .products-grid {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 16px;
+            align-content: start;
+        }
+
+        .product-card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .product-card:hover { border-color: rgba(255,255,255,0.12); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+        .product-card .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .product-card .card-name { font-size: 15px; font-weight: 600; flex: 1; margin-right: 8px; }
+        .product-card .card-badge {
+            font-size: 10px;
+            padding: 3px 10px;
+            border-radius: 99px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            flex-shrink: 0;
+        }
+        .badge-active { background: var(--brand-glow); color: var(--brand); }
+        .badge-inactive { background: var(--red-glow); color: var(--red); }
+
+        .product-card .card-category { font-size: 11px; color: var(--text3); margin-bottom: 8px; }
+        .product-card .card-desc { font-size: 12px; color: var(--text2); line-height: 1.5; margin-bottom: 14px; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        
+        .card-meta { display: flex; gap: 16px; margin-bottom: 14px; }
+        .card-meta .meta-item { display: flex; flex-direction: column; }
+        .card-meta .meta-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+        .card-meta .meta-value { font-size: 14px; font-weight: 600; color: var(--brand); }
+        .card-meta .meta-value.stock-zero { color: var(--red); }
+
+        .card-link {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--brand);
+            text-decoration: none;
+            padding: 6px 10px;
+            background: var(--brand-glow);
+            border-radius: 6px;
+            margin-bottom: 14px;
+            word-break: break-all;
+        }
+        .card-link:hover { background: rgba(16,185,129,0.25); }
+        .card-no-link { font-size: 11px; color: var(--text3); font-style: italic; margin-bottom: 14px; }
+
+        .card-actions { display: flex; gap: 8px; }
+        .btn-sm {
+            padding: 7px 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.03);
+            color: var(--text2);
+            border-radius: 7px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-sm:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+        .btn-sm.danger:hover { background: var(--red-glow); color: var(--red); border-color: rgba(239,68,68,0.3); }
+
+        /* ───── MODAL ───── */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            animation: fadeIn 0.2s ease-out;
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 520px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.5);
+        }
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-header h3 { font-size: 16px; font-weight: 600; }
+        .modal-body { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        .form-group label { font-size: 12px; font-weight: 500; color: var(--text2); }
+        .form-group input, .form-group textarea, .form-group select {
+            padding: 10px 14px;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 13px;
+            outline: none;
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group textarea:focus { border-color: var(--brand); }
+        .form-group textarea { resize: vertical; min-height: 70px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .btn-cancel {
+            padding: 9px 18px;
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: var(--text2);
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-cancel:hover { background: rgba(255,255,255,0.05); }
+
+        /* ───── SCROLLBAR ───── */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* ───── BG DECOR ───── */
+        .bg-glow {
+            position: absolute; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: -1;
+        }
+
+        /* ───── BOTS TAB ───── */
+        .bots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 24px;
+        }
+        .bot-card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            transition: all 0.3s;
+        }
+        .bot-card:hover { transform: translateY(-5px); border-color: var(--brand); }
+        .bot-header { display: flex; justify-content: space-between; align-items: center; }
+        .bot-name { font-weight: 700; font-size: 16px; }
+        .bot-status-pill {
+            font-size: 10px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-connected { background: var(--brand-glow); color: var(--brand); }
+        .status-disconnected { background: var(--red-glow); color: var(--red); }
+        .status-qr { background: rgba(245, 158, 11, 0.15); color: var(--yellow); }
+        
+        .qr-container {
+            background: #fff;
+            padding: 15px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+        }
+        .qr-container canvas, .qr-container img { max-width: 100%; height: auto; }
+        .qr-placeholder { color: #000; font-size: 12px; text-align: center; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+</head>
+<body>
+    <!-- BG Glows -->
+    <div class="bg-glow" style="width:400px;height:400px;background:rgba(16,185,129,0.06);top:-100px;right:-100px;position:fixed;"></div>
+    <div class="bg-glow" style="width:400px;height:400px;background:rgba(59,130,246,0.05);bottom:-100px;left:-100px;position:fixed;"></div>
+
+    <!-- ───── HEADER ───── -->
+    <header class="glass">
+        <div class="logo">
+            <div class="logo-icon"><i class="ph ph-robot"></i></div>
+            <div class="logo-text">
+                <h1>Bot de Tienda</h1>
+                <span>Live Dashboard</span>
+            </div>
+        </div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('chats')" id="tabChats">
+                <i class="ph ph-chats-circle"></i> Chats <span class="badge" id="chatCount">0</span>
+            </button>
+            <button class="tab-btn" onclick="switchTab('products')" id="tabProducts">
+                <i class="ph ph-storefront"></i> Productos <span class="badge" id="productCount">0</span>
+            </button>
+            <button class="tab-btn" onclick="switchTab('bots')" id="tabBots">
+                <i class="ph ph-robot"></i> Mis Bots
+            </button>
+            <button class="tab-btn" onclick="switchTab('users')" id="tabUsers">
+                <i class="ph ph-users"></i> Usuarios
+            </button>
+        </div>
+        <div class="header-actions">
+            <button class="btn-icon" onclick="refreshAll()" title="Refrescar"><i class="ph ph-arrows-clockwise"></i></button>
+            <button class="btn-icon" onclick="logout()" title="Cerrar Sesión" style="color: var(--red);"><i class="ph ph-sign-out"></i></button>
+        </div>
+    </header>
+
+    <!-- ───── MAIN ───── -->
+    <main>
+
+        <!-- ===== CHATS TAB ===== -->
+        <div class="tab-page active" id="pageChats">
+            <div class="chat-layout">
+                <aside class="sidebar glass">
+                    <div class="sidebar-search">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="text" placeholder="Buscar número..." oninput="filterSessions(this.value)">
+                    </div>
+                    <div class="sidebar-search" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+                        <i class="ph ph-robot"></i>
+                        <select id="chatStoreFilter" onchange="loadSessions()" style="background:transparent; border:none; color:var(--text1); width:100%; font-size:13px; outline:none; cursor:pointer;">
+                            <option value="">Todos los bots</option>
+                        </select>
+                    </div>
+                    <div class="sessions-list" id="sessionsList">
+                        <div class="empty-state" style="padding:40px;"><i class="ph ph-spinner" style="font-size:24px;animation:spin 1s linear infinite"></i><p style="margin-top:10px;">Cargando...</p></div>
+                    </div>
+                </aside>
+                <section class="chat-area">
+                    <div class="chat-header" id="chatHeader" style="display:none;">
+                        <div class="avatar"><i class="ph ph-whatsapp-logo"></i></div>
+                        <div class="info">
+                            <h3 id="activeUserPhone"></h3>
+                            <span><span class="dot"></span> Interacción Reciente</span>
+                        </div>
+                        <button onclick="clearActiveChat()" title="Limpiar historial" style="margin-left:auto;background:#ff4d4d;color:white;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:5px;"><i class="ph ph-trash"></i> Limpiar chat</button>
+                    </div>
+                    <div class="empty-state" id="chatEmpty">
+                        <div class="empty-icon"><i class="ph ph-chats"></i></div>
+                        <h3>Ningún chat seleccionado</h3>
+                        <p>Selecciona una conversación del panel lateral.</p>
+                    </div>
+                    <div class="chat-messages" id="chatMessages" style="display:none;"></div>
+                    <div class="chat-input-area" id="chatInputArea" style="display:none;">
+                        <input type="text" id="humanReplyInput" placeholder="Escribe para responder (el bot se pausará)..." onkeypress="if(event.key === 'Enter') sendHumanReply()">
+                        <button onclick="sendHumanReply()"><i class="ph ph-paper-plane-right"></i></button>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- ===== PRODUCTS TAB ===== -->
+        <div class="tab-page" id="pageProducts">
+            <div class="products-layout">
+                <div class="products-toolbar">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <h2><i class="ph ph-package" style="vertical-align:middle;margin-right:6px;"></i> Catálogo</h2>
+                        <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px 12px; border-radius: 8px; border: 1px solid var(--border);">
+                            <i class="ph ph-robot" style="color: var(--text3);"></i>
+                            <select id="productStoreFilter" onchange="loadProducts()" style="background:transparent; border:none; color:var(--text); font-size:13px; outline:none; cursor:pointer; min-width: 150px;">
+                                <option value="">Todas las tiendas</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-primary" onclick="openProductModal()">
+                        <i class="ph ph-plus-circle"></i> Agregar Producto
+                    </button>
+                </div>
+                <div class="products-grid" id="productsGrid">
+                    <!-- Cards injected via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== BOTS TAB ===== -->
+        <div class="tab-page" id="pageBots">
+            <div class="products-layout">
+                <div class="products-toolbar">
+                    <h2><i class="ph ph-robot" style="vertical-align:middle;margin-right:6px;"></i> Administrador de Bots</h2>
+                    <button class="btn-primary" onclick="openStoreModal()">
+                        <i class="ph ph-plus-circle"></i> Añadir Nueva Tienda
+                    </button>
+                </div>
+                <div class="bots-grid" id="botsGrid">
+                    <!-- Bots list here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== USERS TAB ===== -->
+        <div class="tab-page" id="pageUsers">
+            <div class="products-layout">
+                <div class="products-toolbar">
+                    <h2><i class="ph ph-users" style="vertical-align:middle;margin-right:6px;"></i> Gestión de Usuarios</h2>
+                    <button class="btn-primary" onclick="openUserModal()">
+                        <i class="ph ph-user-plus"></i> Añadir Usuario
+                    </button>
+                </div>
+                <div class="products-grid" id="usersGrid">
+                    <!-- Users list here -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ───── MODAL ───── -->
+    <div class="modal-overlay hidden" id="productModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">Nuevo Producto</h3>
+                <button class="btn-icon" onclick="closeProductModal()"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="pId">
+                <div class="form-group">
+                    <label>Asignar a Tienda/Bot *</label>
+                    <select id="pStoreId" style="border-color: var(--brand);">
+                        <!-- Options injected via JS -->
+                    </select>
+                </div>
+                <div class="form-group" style="background: rgba(16,185,129,0.1); padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px dashed var(--brand);">
+                    <label style="color: var(--brand); font-weight: 600;"><i class="ph ph-magic-wand"></i> ✨ Autocompletar con IA</label>
+                    <div style="display: flex; gap: 8px; margin-top: 5px;">
+                        <input type="url" id="pMagicLink" placeholder="Pega el link aquí (Ej: Hotmart, Amazon...)" style="flex: 1; border-color: rgba(16,185,129,0.3);">
+                        <button type="button" onclick="extractWithAI()" id="btnMagic" class="btn-primary" style="padding: 0 16px;">
+                            Extraer
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Contenedor de Sugerencia de IA -->
+                <div id="aiPromptContainer" style="display:none; background: rgba(59,130,246,0.1); padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid rgba(59,130,246,0.3);">
+                    <label style="color: #60a5fa; font-weight: 600; font-size: 11px; display: block; margin-bottom: 4px;"><i class="ph ph-sparkle"></i> Contexto Sugerido para el Bot</label>
+                    <p id="pAiPromptText" style="font-size: 12px; color: var(--text2); font-style: italic; margin-bottom: 10px;"></p>
+                    <button type="button" onclick="applyAiPrompt()" class="btn-sm" style="width:100%; justify-content:center; background: rgba(59,130,246,0.2); color: #60a5fa; border-color: rgba(59,130,246,0.4);">
+                        <i class="ph ph-magic-wand"></i> Usar esta Personalidad para el Bot
+                    </button>
+                </div>
+                <div class="form-group">
+                    <label>Nombre del producto *</label>
+                    <input type="text" id="pNombre" placeholder="Ej: L-Treonato de Magnesio">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <input type="text" id="pCategoria" placeholder="Ej: Suplementos">
+                    </div>
+                    <div class="form-group">
+                        <label>Precio (COP)</label>
+                        <input type="number" id="pPrecio" placeholder="89900">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Descripción corta</label>
+                    <input type="text" id="pDescCorta" placeholder="Breve resumen del producto">
+                </div>
+                <div class="form-group">
+                    <label>Descripción larga</label>
+                    <textarea id="pDescLarga" placeholder="Descripción detallada, beneficios, ingredientes, etc."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>🔗 Link del producto (URL de compra/landing)</label>
+                    <input type="url" id="pLink" placeholder="https://vidasanas.online/#pedido">
+                </div>
+                <div class="form-group">
+                    <label>📷 URL de Imagen (opcional)</label>
+                    <input type="url" id="pImagen" placeholder="https://ejemplo.com/imagen.jpg">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Stock</label>
+                        <input type="number" id="pStock" placeholder="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Estado</label>
+                        <select id="pActivo">
+                            <option value="1">✅ Activo (visible)</option>
+                            <option value="0">🚫 Inactivo (oculto)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Tags (separados por coma)</label>
+                    <input type="text" id="pTags" placeholder="magnesio, sueño, memoria, suplemento">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeProductModal()">Cancelar</button>
+                <button class="btn-primary" onclick="saveProduct()" id="btnSave">
+                    <i class="ph ph-floppy-disk"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ───── MODAL TIENDA ───── -->
+    <div class="modal-overlay hidden" id="storeModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="storeModalTitle">Nueva Tienda / Bot</h3>
+                <button class="btn-icon" onclick="closeStoreModal()"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>ID único de la tienda (sin espacios)</label>
+                    <input type="text" id="sId" placeholder="ej: hotmart-magnesio">
+                </div>
+                <div class="form-group">
+                    <label>Nombre comercial</label>
+                    <input type="text" id="sNombre" placeholder="ej: Tienda Salud Natural">
+                </div>
+                <div class="form-group">
+                    <label>System Prompt (Instrucciones de la IA) *</label>
+                    <textarea id="sPrompt" placeholder="Eres un vendedor experto en..." style="height: 120px;"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>API Key de OpenAI (Opcional, usa la global si queda vacío)</label>
+                    <input type="password" id="sApiKey" placeholder="sk-...">
+                </div>
+                <div class="form-group">
+                    <label>WhatsApp Phone Number ID (Meta Cloud API)</label>
+                    <input type="text" id="sPhoneNumberId" placeholder="ej: 1046083315259153">
+                </div>
+                <div class="form-group">
+                    <label>WhatsApp Access Token (Meta Cloud API)</label>
+                    <input type="password" id="sAccessToken" placeholder="EAABXHSsk...">
+                </div>
+                <div class="form-group">
+                    <label><i class="ph ph-envelope" style="vertical-align:middle;margin-right:4px;"></i> Correo de PQR / Soporte</label>
+                    <input type="email" id="sPqrEmail" placeholder="ej: soporte@vidasanas.com">
+                    <small style="color:var(--text2);font-size:11px;">El bot dará este correo si el cliente tiene quejas o reclamos.</small>
+                </div>
+                <hr style="border:0;border-top:1px solid var(--border);margin:15px 0;">
+                <div class="form-group">
+                    <label><i class="ph ph-telegram-logo" style="vertical-align:middle;margin-right:4px;"></i> Telegram Bot Token (Opcional)</label>
+                    <input type="password" id="sTelegramToken" placeholder="7123456789:AAH...">
+                    <small style="color:var(--text2);font-size:11px;">Obtenlo hablándole a @BotFather en Telegram.</small>
+                </div>
+                <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+                    <input type="checkbox" id="sTelegramActive" style="width:auto;">
+                    <label for="sTelegramActive" style="margin-bottom:0;cursor:pointer;">Activar bot de Telegram</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeStoreModal()">Cancelar</button>
+                <button class="btn-primary" onclick="saveStore()" id="btnSaveStore">Guardar y Crear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ───── MODAL USUARIO ───── -->
+    <div class="modal-overlay hidden" id="userModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="userModalTitle">Nuevo Usuario</h3>
+                <button class="btn-icon" onclick="closeUserModal()"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Nombre de Usuario *</label>
+                    <input type="text" id="uUsername" placeholder="Ej: admin_andres">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña *</label>
+                    <input type="password" id="uPassword" placeholder="******">
+                </div>
+                <div class="form-group">
+                    <label>Rol</label>
+                    <select id="uRole" onchange="document.getElementById('uStoreGroup').style.display = this.value === 'superadmin' ? 'none' : 'block'">
+                        <option value="store_owner">Dueño de Tienda</option>
+                        <option value="superadmin">SuperAdmin</option>
+                    </select>
+                </div>
+                <div class="form-group" id="uStoreGroup">
+                    <label>Asignar a Tienda (Solo para dueños)</label>
+                    <select id="uStoreId">
+                        <option value="">Selecciona una tienda</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeUserModal()">Cancelar</button>
+                <button class="btn-primary" onclick="saveUser()">Crear Usuario</button>
+            </div>
+        </div>
+    </div>
+
+                <button class="btn-primary" onclick="saveUser()">Crear Usuario</button>
+            </div>
+        </div>
+    </div>
+
+    <style>@keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }</style>
+
+    <script>
+    async function logout() {
+        if (!confirm('¿Cerrar sesión?')) return;
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            window.location.href = '/login.html';
+        } catch (e) {
+            console.error('Error al cerrar sesión:', e);
+        }
+    }
+
+    // ═══════════════════════════════════════
+    //  STATE & UTILS
+    // ═══════════════════════════════════════
+    let allSessions = [];
+    let allProducts = [];
+    let allStores = [];
+    let activeSessionId = null;
+    let editingProductId = null;
+
+    function escapeHTML(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function cleanPhone(sessionId) {
+        // Extrae solo el número: quita storeId_ al inicio y @lid/@c.us al final
+        let phone = sessionId.includes('_') ? sessionId.split('_').slice(1).join('_') : sessionId;
+        phone = phone.replace(/@.*$/, ''); // quita @lid, @c.us, etc.
+        // Formatear con espacios para legibilidad: +52 1 331 228 8602
+        if (phone.length >= 10) {
+            // Tomar los últimos 10 dígitos como número local y el resto como código de país
+            const countryCode = phone.slice(0, phone.length - 10);
+            const local = phone.slice(phone.length - 10);
+            return '+' + countryCode + ' ' + local.slice(0,3) + ' ' + local.slice(3,6) + ' ' + local.slice(6);
+        }
+        return '+' + phone;
+    }
+
+    // ═══════════════════════════════════════
+    //  TABS
+    // ═══════════════════════════════════════
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+        if (tab === 'chats') {
+            document.getElementById('tabChats').classList.add('active');
+            document.getElementById('pageChats').classList.add('active');
+        } else if (tab === 'products') {
+            document.getElementById('tabProducts').classList.add('active');
+            document.getElementById('pageProducts').classList.add('active');
+            loadProducts();
+        } else if (tab === 'bots') {
+            document.getElementById('tabBots').classList.add('active');
+            document.getElementById('pageBots').classList.add('active');
+            loadStores();
+        } else if (tab === 'users') {
+            document.getElementById('tabUsers').classList.add('active');
+            document.getElementById('pageUsers').classList.add('active');
+            loadUsers();
+        }
+    }
+
+    function refreshAll() {
+        loadSessions();
+        loadProducts();
+        loadStores();
+    }
+
+    // ═══════════════════════════════════════
+    //  CHATS
+    // ═══════════════════════════════════════
+    async function loadSessions() {
+        try {
+            const filterEl = document.getElementById('chatStoreFilter');
+            const storeFilter = filterEl ? filterEl.value : '';
+            const url = storeFilter ? `/dashboard/api/sessions?storeId=${storeFilter}` : '/dashboard/api/sessions';
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            if (Array.isArray(data)) {
+                allSessions = data;
+                document.getElementById('chatCount').textContent = allSessions.length;
+                renderSessionsList();
+            }
+        } catch (e) {
+            console.error('Error cargando sesiones:', e);
+        }
+    }
+
+    function filterSessions(val) {
+        const list = document.getElementById('sessionsList');
+        const items = list.querySelectorAll('.session-item');
+        items.forEach(item => {
+            const phone = item.getAttribute('data-phone') || '';
+            item.style.display = phone.includes(val) ? '' : 'none';
+        });
+    }
+
+    function renderSessionsList() {
+        const list = document.getElementById('sessionsList');
+        if (!list) return;
+        
+        // Limpieza selectiva: no destruir todo el DOM para evitar parpadeo
+        const _existingItems = {};
+        list.querySelectorAll('.session-item').forEach(el => { _existingItems[el.getAttribute('data-phone')] = el; });
+        const _currentIds = new Set(allSessions.map(s => s.sessionId));
+        Object.keys(_existingItems).forEach(id => { if (!_currentIds.has(id)) _existingItems[id].remove(); });
+        const _emptyEl = list.querySelector('.empty-state'); if (_emptyEl) _emptyEl.remove();
+        if (allSessions.length === 0) {
+            list.innerHTML = '<div class="empty-state" style="padding:40px;"><p>No hay conversaciones aún.</p></div>';
+            return;
+        }
+        allSessions.forEach(s => {
+            const history = Array.isArray(s.history) ? s.history : [];
+            const last = history.slice().reverse().find(m => m.role === 'user' || m.role === 'assistant');
+            let preview = last ? (typeof last.content === 'string' ? last.content : 'Envió un mensaje') : '—';
+            if (preview.length > 40) preview = preview.substring(0, 40) + '…';
+
+            const ic = '<div class="top"><span class="phone">' + escapeHTML(cleanPhone(s.sessionId)) + '</span><span class="time">' + formatTime(s.updatedAt) + '</span></div><div class="preview">' + (last?.role === 'assistant' ? '<i class="ph ph-robot" style="color:var(--brand);margin-right:4px;vertical-align:middle;"></i>' : '') + escapeHTML(preview) + '</div>';
+            const hash = preview + '|' + (s.updatedAt || '');
+            let div = _existingItems[s.sessionId];
+            if (div) {
+                if (div._hash !== hash) { div.innerHTML = ic; div._hash = hash; }
+                div.classList.toggle('active', activeSessionId === s.sessionId);
+            } else {
+                div = document.createElement('div');
+                div.className = 'session-item' + (activeSessionId === s.sessionId ? ' active' : '');
+                div.setAttribute('data-phone', s.sessionId);
+                div.onclick = () => selectSession(s.sessionId);
+                div.innerHTML = ic;
+                div._hash = hash;
+                list.appendChild(div);
+            }
+        });
+
+        // Si hay una sesión activa, actualizar su vista sin redibujar la lista
+        if (activeSessionId) {
+            const current = allSessions.find(x => x.sessionId === activeSessionId);
+            if (current) renderActiveChat(current);
+        }
+    }
+
+    function formatTime(t) {
+        if (!t) return '';
+        try {
+            let d = new Date(t);
+            if (isNaN(d.getTime())) d = new Date(t + 'Z');
+            if (isNaN(d.getTime())) return '';
+            const now = new Date();
+            const diffMs = now - d;
+            const diffMins = Math.floor(diffMs / 60000);
+            if (diffMins < 1) return 'Ahora';
+            if (diffMins < 60) return diffMins + ' min';
+            if (diffMins < 1440) return Math.floor(diffMins/60) + 'h';
+            return d.toLocaleDateString([], {day:'2-digit', month:'short'});
+        } catch(e) { return ''; }
+    }
+
+    function selectSession(sid) {
+        activeSessionId = sid;
+        // Solo marcamos como activo en la lista sin redibujar todo
+        document.querySelectorAll('.session-item').forEach(el => {
+            el.classList.toggle('active', el.getAttribute('data-phone') === sid);
+        });
+
+        const s = allSessions.find(x => x.sessionId === sid);
+        if (!s) return;
+        renderActiveChat(s);
+    }
+
+    let _lastChatHash = '';
+    function renderActiveChat(s) {
+        const sid = s.sessionId;
+        const history = Array.isArray(s.history) ? s.history : [];
+        const chatHash = sid + '|' + history.length + '|' + JSON.stringify(history[history.length - 1]?.content || '').substring(0, 50);
+        if (_lastChatHash === chatHash) return;
+        _lastChatHash = chatHash;
+        document.getElementById('chatEmpty').style.display = 'none';
+        document.getElementById('chatHeader').style.display = 'flex';
+        document.getElementById('chatInputArea').style.display = 'flex';
+        const msgs = document.getElementById('chatMessages');
+        msgs.style.display = 'flex';
+        msgs.innerHTML = '';
+        document.getElementById('activeUserPhone').textContent = cleanPhone(sid);
+        history.forEach(m => {
+            if (m.role === 'system') return;
+            const div = document.createElement('div');
+            div.className = 'msg';
+            let content = typeof m.content === 'string' ? m.content : '';
+            if (m.role === 'user') {
+                div.classList.add('user');
+                if (Array.isArray(m.content)) { const tp = m.content.find(c => c.type === 'text'); content = tp?.text || ''; }
+                div.textContent = content || 'Sent a message';
+            } else if (m.role === 'assistant' && !m.tool_calls) {
+                div.classList.add('assistant');
+                div.textContent = content;
+            } else if (m.role === 'assistant' && m.tool_calls) {
+                div.classList.add('tool-msg');
+                div.innerHTML = '<i class="ph ph-gear" style="animation:spin 1s linear infinite"></i> ' + m.tool_calls[0].function.name;
+            } else if (m.role === 'tool') {
+                div.classList.add('tool-msg');
+                div.innerHTML = '<i class="ph ph-check-circle" style="color:var(--brand)"></i> Resultado recibido';
+            } else return;
+            msgs.appendChild(div);
+        });
+        msgs.scrollTo({ top: msgs.scrollHeight, behavior: 'instant' });
+    }
+
+    async function sendHumanReply() {
+        if (!activeSessionId) return;
+        const input = document.getElementById('humanReplyInput');
+        const message = input.value.trim();
+        if (!message) return;
+
+        input.value = '';
+        const parts = activeSessionId.split('_');
+        const storeId = parts[0];
+        const phone = parts.length > 1 ? parts.slice(1).join('_') : activeSessionId;
+
+        try {
+            await fetch('/dashboard/api/reply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: activeSessionId, message, phone, storeId })
+            });
+            await loadSessions();
+        } catch(e) {
+            alert('Error enviando mensaje: ' + e.message);
+        }
+    }
+
+    async function clearActiveChat() {
+        if (!activeSessionId) return;
+        if (!confirm('¿Limpiar el historial de este chat? El bot empezará desde cero con este usuario.')) return;
+        try {
+            const res = await fetch(`/dashboard/api/sessions/${encodeURIComponent(activeSessionId)}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error((await res.json()).error);
+            activeSessionId = null;
+            document.getElementById('chatHeader').style.display = 'none';
+            document.getElementById('chatMessages').style.display = 'none';
+            document.getElementById('chatInputArea').style.display = 'none';
+            document.getElementById('chatEmpty').style.display = 'flex';
+            await loadSessions();
+        } catch (e) {
+            alert('Error limpiando chat: ' + e.message);
+        }
+    }
+
+    async function extractWithAI() {
+        const url = document.getElementById('pMagicLink').value.trim();
+        if (!url) {
+            alert('Pega un link primero');
+            return;
+        }
+        
+        const btn = document.getElementById('btnMagic');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="ph ph-spinner" style="animation:spin 1s linear infinite"></i> ...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch('/dashboard/api/products/extract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            const data = await res.json();
+            
+            if (data.error) throw new Error(data.error);
+
+            if (data.nombre) document.getElementById('pNombre').value = data.nombre;
+            if (data.precio) document.getElementById('pPrecio').value = data.precio;
+            if (data.categoria) document.getElementById('pCategoria').value = data.categoria;
+            if (data.descripcion_corta) document.getElementById('pDescCorta').value = data.descripcion_corta;
+            if (data.descripcion_larga) document.getElementById('pDescLarga').value = data.descripcion_larga;
+            if (data.imagen) document.getElementById('pImagen').value = data.imagen;
+            
+            // Manejar sugerencia de contexto
+            if (data.system_prompt_sugerido) {
+                document.getElementById('aiPromptContainer').style.display = 'block';
+                document.getElementById('pAiPromptText').textContent = data.system_prompt_sugerido;
+                window.lastAiPrompt = data.system_prompt_sugerido;
+            } else {
+                document.getElementById('aiPromptContainer').style.display = 'none';
+            }
+
+            // Si no habian puesto el link de compra, lo ponemos
+            if (!document.getElementById('pLink').value) {
+                document.getElementById('pLink').value = url;
+            }
+
+        } catch(e) {
+            alert('Error extrayendo con IA: ' + e.message);
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    async function applyAiPrompt() {
+        const prompt = window.lastAiPrompt;
+        const storeId = document.getElementById('pStoreId').value;
+        if (!prompt || !storeId) return;
+
+        if (!confirm("¿Deseas actualizar la personalidad del Bot con esta sugerencia? Reemplazará el System Prompt actual de la tienda.")) return;
+
+        try {
+            // Buscamos la tienda actual para no sobreescribir otros datos si no los tenemos
+            const store = allStores.find(s => s.id === storeId);
+            if (!store) throw new Error("Tienda no encontrada");
+
+            const res = await fetch(`/dashboard/api/stores/${storeId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: store.name,
+                    systemPrompt: prompt,
+                    openaiApiKey: store.openaiApiKey,
+                    isActive: store.isActive
+                })
+            });
+
+            if (res.ok) {
+                alert("¡Bot actualizado con éxito!");
+                document.getElementById('aiPromptContainer').style.display = 'none';
+                loadStores(); // Recargar para tener los datos frescos
+            } else {
+                throw new Error("Error en la respuesta del servidor");
+            }
+        } catch(e) {
+            alert("Error al aplicar el contexto: " + e.message);
+        }
+    }
+
+    // ═══════════════════════════════════════
+    //  PRODUCTS
+    // ═══════════════════════════════════════
+    async function loadProducts() {
+        try {
+            const filterEl = document.getElementById('productStoreFilter');
+            const storeFilter = filterEl ? filterEl.value : '';
+            const url = storeFilter ? `/dashboard/api/products?storeId=${storeFilter}` : '/dashboard/api/products';
+            const res = await fetch(url);
+            allProducts = await res.json();
+            document.getElementById('productCount').textContent = allProducts.length;
+            renderProducts();
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function renderProducts() {
+        const grid = document.getElementById('productsGrid');
+        grid.innerHTML = '';
+        if (allProducts.length === 0) {
+            grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:60px;"><div class="empty-icon"><i class="ph ph-storefront"></i></div><h3>Sin productos</h3><p>Agrega tu primer producto con el botón de arriba.</p></div>';
+            return;
+        }
+        allProducts.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'product-card';
+            const priceStr = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(p.precio);
+            card.innerHTML = `
+                <div class="card-top">
+                    <div class="card-name">${escapeHTML(p.nombre)}</div>
+                    <span class="card-badge ${p.activo ? 'badge-active' : 'badge-inactive'}">${p.activo ? 'Activo' : 'Inactivo'}</span>
+                </div>
+                <div class="card-category"><i class="ph ph-tag" style="vertical-align:middle;margin-right:2px;"></i> ${escapeHTML(p.categoria || 'Sin categoría')}</div>
+                <div class="card-desc">${escapeHTML(p.descripcion_corta || p.descripcion_larga || 'Sin descripción')}</div>
+                <div class="card-meta">
+                    <div class="meta-item"><span class="meta-label">Precio</span><span class="meta-value">${priceStr}</span></div>
+                    <div class="meta-item"><span class="meta-label">Stock</span><span class="meta-value ${p.stock === 0 ? 'stock-zero' : ''}">${p.stock}</span></div>
+                    <div class="meta-item"><span class="meta-label">Tags</span><span class="meta-value" style="font-size:11px;color:var(--text2);">${escapeHTML((p.tags || []).slice(0,3).join(', ')) || '—'}</span></div>
+                </div>
+                ${p.link ? `<a href="${escapeHTML(p.link)}" target="_blank" class="card-link"><i class="ph ph-link"></i> ${escapeHTML(p.link.length > 45 ? p.link.substring(0,45)+'…' : p.link)}</a>` : '<div class="card-no-link">Sin link de producto</div>'}
+                <div class="card-actions">
+                    <button class="btn-sm" onclick='editProduct("${p.id}")'><i class="ph ph-pencil-simple"></i> Editar</button>
+                    <button class="btn-sm danger" onclick='confirmDelete("${p.id}", "${escapeHTML(p.nombre).replace(/'/g,"\\'")}", "${p.storeId}");'><i class="ph ph-trash"></i> Eliminar</button>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    // ── Modal ──
+    function openProductModal() {
+        editingProductId = null;
+        document.getElementById('modalTitle').textContent = 'Nuevo Producto';
+        document.getElementById('pId').value = '';
+        document.getElementById('pNombre').value = '';
+        document.getElementById('pCategoria').value = '';
+        document.getElementById('pPrecio').value = '';
+        document.getElementById('pDescCorta').value = '';
+        document.getElementById('pDescLarga').value = '';
+        document.getElementById('pLink').value = '';
+        document.getElementById('pImagen').value = '';
+        document.getElementById('pStock').value = '';
+        document.getElementById('pActivo').value = '1';
+        document.getElementById('pTags').value = '';
+        
+        // Reset AI suggestion
+        document.getElementById('aiPromptContainer').style.display = 'none';
+        document.getElementById('pAiPromptText').textContent = '';
+        window.lastAiPrompt = null;
+
+        // Pre-seleccionar la tienda si hay un filtro activo
+        const filterVal = document.getElementById('productStoreFilter').value;
+        if (filterVal) {
+            document.getElementById('pStoreId').value = filterVal;
+        }
+        document.getElementById('pStoreId').disabled = false;
+        
+        document.getElementById('productModal').classList.remove('hidden');
+    }
+
+    function editProduct(id) {
+        const p = allProducts.find(x => x.id === id);
+        if (!p) return;
+        editingProductId = id;
+        document.getElementById('modalTitle').textContent = 'Editar Producto';
+        document.getElementById('pId').value = p.id;
+        document.getElementById('pNombre').value = p.nombre;
+        document.getElementById('pCategoria').value = p.categoria;
+        document.getElementById('pPrecio').value = p.precio;
+        document.getElementById('pDescCorta').value = p.descripcion_corta;
+        document.getElementById('pDescLarga').value = p.descripcion_larga;
+        document.getElementById('pLink').value = p.link || '';
+        document.getElementById('pImagen').value = p.imagen_url || '';
+        document.getElementById('pStock').value = p.stock;
+        document.getElementById('pActivo').value = p.activo ? '1' : '0';
+        document.getElementById('pTags').value = (p.tags || []).join(', ');
+        
+        // Fijar la tienda (no se suele cambiar la tienda de un producto)
+        document.getElementById('pStoreId').value = p.storeId;
+        document.getElementById('pStoreId').disabled = true;
+
+        document.getElementById('productModal').classList.remove('hidden');
+    }
+
+    function closeProductModal() {
+        document.getElementById('productModal').classList.add('hidden');
+    }
+
+    async function saveProduct() {
+        const nombre = document.getElementById('pNombre').value.trim();
+        const storeId = document.getElementById('pStoreId').value;
+        
+        if (!nombre) { alert('El nombre es obligatorio'); return; }
+        if (!storeId) { alert('Debes asignar el producto a una tienda'); return; }
+
+        const body = {
+            nombre,
+            storeId,
+            categoria: document.getElementById('pCategoria').value.trim(),
+            precio: parseFloat(document.getElementById('pPrecio').value) || 0,
+            descripcion_corta: document.getElementById('pDescCorta').value.trim(),
+            descripcion_larga: document.getElementById('pDescLarga').value.trim(),
+            link: document.getElementById('pLink').value.trim(),
+            imagen_url: document.getElementById('pImagen').value.trim(),
+            stock: parseInt(document.getElementById('pStock').value) || 0,
+            activo: document.getElementById('pActivo').value === '1',
+            tags: document.getElementById('pTags').value.split(',').map(t => t.trim()).filter(Boolean)
+        };
+
+        try {
+            let res;
+            if (editingProductId) {
+                res = await fetch(`/dashboard/api/products/${editingProductId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            } else {
+                res = await fetch('/dashboard/api/products', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+            }
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || 'Error al guardar el producto');
+            }
+
+            closeProductModal();
+            await loadProducts();
+        } catch (e) {
+            alert('Error guardando producto: ' + e.message);
+        }
+    }
+
+    async function confirmDelete(id, nombre, storeId) {
+        if (!confirm(`¿Eliminar "${nombre}" del catálogo? Esta acción no se puede deshacer.`)) return;
+        try {
+            await fetch(`/dashboard/api/products/${id}?storeId=${storeId}`, { method: 'DELETE' });
+            await loadProducts();
+        } catch (e) {
+            alert('Error eliminando producto');
+        }
+    }
+
+    // ═══════════════════════════════════════
+    //  BOTS / STORES
+    // ═══════════════════════════════════════
+    let botPollingIntervals = {};
+
+    async function loadStores() {
+        try {
+            const res = await fetch('/dashboard/api/stores');
+            allStores = await res.json();
+            renderBots();
+            updateChatStoreFilter();
+        } catch (e) { console.error(e); }
+    }
+
+    function updateChatStoreFilter() {
+        const chatSelect = document.getElementById('chatStoreFilter');
+        const prodSelect = document.getElementById('productStoreFilter');
+        const modalSelect = document.getElementById('pStoreId');
+        
+        if (!chatSelect || !prodSelect || !modalSelect) return;
+        
+        const currentChatVal = chatSelect.value;
+        const currentProdVal = prodSelect.value;
+        
+        chatSelect.innerHTML = '<option value="">Todos los bots</option>';
+        prodSelect.innerHTML = '<option value="">Todas las tiendas</option>';
+        modalSelect.innerHTML = '<option value="">-- Seleccionar Tienda --</option>';
+        
+        allStores.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name;
+            chatSelect.appendChild(opt.cloneNode(true));
+            prodSelect.appendChild(opt.cloneNode(true));
+            modalSelect.appendChild(opt.cloneNode(true));
+        });
+        
+        chatSelect.value = currentChatVal;
+        prodSelect.value = currentProdVal;
+    }
+
+    function renderBots() {
+        const grid = document.getElementById('botsGrid');
+        grid.innerHTML = '';
+        allStores.forEach(s => {
+            const card = document.createElement('div');
+            card.className = 'bot-card';
+            card.id = `bot-card-${s.id}`;
+            card.innerHTML = `
+                <div class="bot-header">
+                    <span class="bot-name">${s.name}</span>
+                    <span class="bot-status-pill status-disconnected" id="status-${s.id}">CARGANDO...</span>
+                </div>
+                <div id="qr-area-${s.id}" class="qr-container" style="display:none;">
+                    <canvas id="qr-canvas-${s.id}"></canvas>
+                    <p class="qr-placeholder" style="margin-top:10px;">Escanea con WhatsApp</p>
+                </div>
+                <div id="connected-area-${s.id}" style="display:none; text-align:center; padding:20px;">
+                    <i class="ph ph-check-circle" style="font-size:48px; color:var(--brand);"></i>
+                    <p style="margin-top:10px; font-weight:600;">Bot Conectado</p>
+                </div>
+                <div id="start-btn-area-${s.id}" style="margin-top: auto; margin-bottom: 10px;">
+                    <button class="btn-primary" style="width: 100%; justify-content: center;" onclick="startBot('${s.id}')">Iniciar Bot / Conectar</button>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-sm" style="flex:1; justify-content:center;" title="Editar Tienda" onclick="editStore('${s.id}')"><i class="ph ph-pencil-simple"></i> Editar</button>
+                    <button class="btn-sm danger" style="flex:1; justify-content:center;" title="Eliminar Tienda" onclick="deleteStore('${s.id}', '${s.name}')"><i class="ph ph-trash"></i> Eliminar</button>
+                </div>
+            `;
+            grid.appendChild(card);
+            updateBotStatus(s.id);
+        });
+    }
+
+    async function deleteStore(id, name) {
+        if (!confirm(`¿Estás seguro de eliminar la tienda "${name}"? Se detendrá el bot y se borrarán sus datos.`)) return;
+        try {
+            await fetch(`/dashboard/api/stores/${id}`, { method: 'DELETE' });
+            loadStores();
+        } catch (e) { alert('Error eliminando tienda'); }
+    }
+
+    async function updateBotStatus(storeId) {
+        try {
+            const res = await fetch(`/dashboard/api/bots/status/${storeId}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const statusPill = document.getElementById(`status-${storeId}`);
+            const qrArea = document.getElementById(`qr-area-${storeId}`);
+            const connectedArea = document.getElementById(`connected-area-${storeId}`);
+            const startBtnArea = document.getElementById(`start-btn-area-${storeId}`);
+            if (!statusPill) return;
+
+            if (data.status === 'CONNECTED') {
+                statusPill.textContent = 'CONECTADO';
+                statusPill.className = 'bot-status-pill status-connected';
+                qrArea.style.display = 'none';
+                connectedArea.style.display = 'block';
+                startBtnArea.style.display = 'none';
+                if(botPollingIntervals[storeId]) clearInterval(botPollingIntervals[storeId]);
+            } else if (data.status === 'QR_READY' && data.qr) {
+                statusPill.textContent = 'ESPERANDO QR';
+                statusPill.className = 'bot-status-pill status-qr';
+                qrArea.style.display = 'flex';
+                connectedArea.style.display = 'none';
+                startBtnArea.style.display = 'none';
+                QRCode.toCanvas(document.getElementById(`qr-canvas-${storeId}`), data.qr, { width: 180 });
+                startPolling(storeId);
+            } else {
+                statusPill.textContent = 'DESCONECTADO';
+                statusPill.className = 'bot-status-pill status-disconnected';
+                qrArea.style.display = 'none';
+                connectedArea.style.display = 'none';
+                startBtnArea.style.display = 'block';
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    function startPolling(storeId) {
+        if (botPollingIntervals[storeId]) return;
+        botPollingIntervals[storeId] = setInterval(() => updateBotStatus(storeId), 3000);
+    }
+
+    async function startBot(storeId) {
+        const btnArea = document.getElementById(`start-btn-area-${storeId}`);
+        if (btnArea) {
+            const btn = btnArea.querySelector('button');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="ph ph-spinner" style="animation:spin 1s linear infinite"></i> Iniciando...';
+            }
+        }
+        
+        await fetch(`/dashboard/api/bots/start/${storeId}`, { method: 'POST' });
+        updateBotStatus(storeId);
+        startPolling(storeId);
+    }
+
+    let editingStoreId = null;
+
+    function editStore(id) {
+        const s = allStores.find(x => x.id === id);
+        if (!s) return;
+        editingStoreId = id;
+        document.getElementById('storeModalTitle').textContent = 'Editar Tienda / Bot';
+        document.getElementById('sId').value = s.id;
+        document.getElementById('sId').disabled = true;
+        document.getElementById('sNombre').value = s.name;
+        document.getElementById('sPrompt').value = s.systemPrompt || '';
+        document.getElementById('sApiKey').value = s.openaiApiKey || '';
+        document.getElementById('sPhoneNumberId').value = s.whatsappPhoneNumberId || '';
+        document.getElementById('sAccessToken').value = s.whatsappAccessToken || '';
+        document.getElementById('sPqrEmail').value = s.pqrEmail || '';
+        document.getElementById('sTelegramToken').value = s.telegramToken || '';
+        document.getElementById('sTelegramActive').checked = !!s.telegramBotActive;
+        document.getElementById('btnSaveStore').textContent = 'Guardar Cambios';
+        document.getElementById('storeModal').classList.remove('hidden');
+    }
+
+    function openStoreModal() {
+        editingStoreId = null;
+        document.getElementById('storeModalTitle').textContent = 'Nueva Tienda / Bot';
+        document.getElementById('sId').value = '';
+        document.getElementById('sId').disabled = false;
+        document.getElementById('sNombre').value = '';
+        document.getElementById('sPrompt').value = '';
+        document.getElementById('sApiKey').value = '';
+        document.getElementById('sPhoneNumberId').value = '';
+        document.getElementById('sAccessToken').value = '';
+        document.getElementById('sPqrEmail').value = '';
+        document.getElementById('sTelegramToken').value = '';
+        document.getElementById('sTelegramActive').checked = false;
+        document.getElementById('btnSaveStore').textContent = 'Guardar y Crear';
+        document.getElementById('storeModal').classList.remove('hidden');
+    }
+    function closeStoreModal() { document.getElementById('storeModal').classList.add('hidden'); }
+
+    async function saveStore() {
+        const id = editingStoreId || document.getElementById('sId').value.trim();
+        const name = document.getElementById('sNombre').value.trim();
+        const systemPrompt = document.getElementById('sPrompt').value.trim();
+        if (!id || !name) { alert('ID y Nombre son obligatorios'); return; }
+        if (!systemPrompt) { alert('El System Prompt es obligatorio'); return; }
+
+        try {
+            const body = {
+                id, name,
+                systemPrompt,
+                openaiApiKey: document.getElementById('sApiKey').value.trim() || null,
+                whatsappPhoneNumberId: document.getElementById('sPhoneNumberId').value.trim() || null,
+                whatsappAccessToken: document.getElementById('sAccessToken').value.trim() || null,
+                pqrEmail: document.getElementById('sPqrEmail').value.trim() || null,
+                telegramToken: document.getElementById('sTelegramToken').value.trim() || null,
+                telegramBotActive: document.getElementById('sTelegramActive').checked,
+                isActive: true
+            };
+            const res = await fetch(
+                editingStoreId ? `/dashboard/api/stores/${editingStoreId}` : '/dashboard/api/stores',
+                {
+                    method: editingStoreId ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                }
+            );
+            if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Error desconocido'); }
+            closeStoreModal();
+            loadStores();
+        } catch (e) {
+            alert('Error guardando tienda: ' + e.message);
+        }
+    }
+
+    // ═══════════════════════════════════════
+    //  USERS (SuperAdmin Only)
+    // ═══════════════════════════════════════
+    async function loadUsers() {
+        try {
+            const res = await fetch('/dashboard/api/users');
+            if (res.status === 403) return; // No es superadmin
+            const users = await res.json();
+            
+            document.getElementById('tabUsers').style.display = 'flex'; // Mostrar la pestaña
+
+            const grid = document.getElementById('usersGrid');
+            grid.innerHTML = '';
+            
+            users.forEach(u => {
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.innerHTML = `
+                    <div class="card-top">
+                        <div class="card-name"><i class="ph ph-user" style="vertical-align:middle;"></i> ${escapeHTML(u.username)}</div>
+                        <span class="card-badge ${u.role === 'superadmin' ? 'badge-active' : ''}" style="background:var(--panel2);">${u.role}</span>
+                    </div>
+                    <div class="card-meta" style="margin-top: 15px;">
+                        <div class="meta-item"><span class="meta-label">Tienda Asignada</span><span class="meta-value">${escapeHTML(u.storeId || 'Acceso Total')}</span></div>
+                    </div>
+                    <div class="card-actions" style="margin-top: 20px;">
+                        <button class="btn-sm danger" style="width:100%; justify-content:center;" onclick="deleteUser('${u.id}', '${escapeHTML(u.username)}')"><i class="ph ph-trash"></i> Revocar Acceso</button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+            
+            // Llenar selectores de tiendas para el modal de usuario
+            const storeSelect = document.getElementById('uStoreId');
+            storeSelect.innerHTML = '<option value="">Ninguna (SuperAdmin)</option>';
+            allStores.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.name;
+                storeSelect.appendChild(opt);
+            });
+            
+        } catch (e) {
+            console.error('Error loading users:', e);
+        }
+    }
+
+    function openUserModal() {
+        document.getElementById('uUsername').value = '';
+        document.getElementById('uPassword').value = '';
+        document.getElementById('uRole').value = 'store_owner';
+        document.getElementById('uStoreGroup').style.display = 'block';
+        document.getElementById('userModal').classList.remove('hidden');
+    }
+
+    function closeUserModal() {
+        document.getElementById('userModal').classList.add('hidden');
+    }
+
+    async function saveUser() {
+        const username = document.getElementById('uUsername').value.trim();
+        const password = document.getElementById('uPassword').value.trim();
+        const role = document.getElementById('uRole').value;
+        const storeId = document.getElementById('uStoreId').value;
+
+        if (!username || !password) { alert('Usuario y contraseña son obligatorios'); return; }
+
+        try {
+            const res = await fetch('/dashboard/api/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, role, storeId: storeId || null })
+            });
+            if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
+            closeUserModal();
+            loadUsers();
+        } catch (e) {
+            alert('Error creando usuario: ' + e.message);
+        }
+    }
+
+    async function deleteUser(id, username) {
+        if (!confirm(`¿Eliminar acceso del usuario ${username}?`)) return;
+        try {
+            await fetch(`/dashboard/api/users/${id}`, { method: 'DELETE' });
+            loadUsers();
+        } catch (e) {
+            alert('Error eliminando usuario');
+        }
+    }
+
+    // ═══════════════════════════════════════
+    //  INIT
+    // ═══════════════════════════════════════
+    let serverOnline = true;
+
+    function showOfflineBanner(show) {
+        let banner = document.getElementById('offlineBanner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'offlineBanner';
+            banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#ef4444;color:white;text-align:center;padding:8px;font-size:13px;font-weight:600;transition:transform .3s;';
+            banner.innerHTML = '<i class="ph ph-wifi-slash" style="margin-right:6px;"></i> Servidor desconectado — reconectando automáticamente...';
+            document.body.prepend(banner);
+        }
+        banner.style.transform = show ? 'translateY(0)' : 'translateY(-100%)';
+    }
+
+    async function safeFetch(url) {
+        try {
+            const res = await fetch(url);
+            if (!res.ok) return null;
+            if (!serverOnline) { serverOnline = true; showOfflineBanner(false); }
+            return await res.json();
+        } catch (e) {
+            if (serverOnline) { serverOnline = false; showOfflineBanner(true); }
+            return null;
+        }
+    }
+
+    // Override loadSessions para usar safeFetch
+    const _origLoadSessions = loadSessions;
+    loadSessions = async function() {
+        try {
+            const filterEl = document.getElementById('chatStoreFilter');
+            const storeFilter = filterEl ? filterEl.value : '';
+            const url = storeFilter ? `/dashboard/api/sessions?storeId=${storeFilter}` : '/dashboard/api/sessions';
+            const data = await safeFetch(url);
+            if (data && Array.isArray(data)) {
+                allSessions = data;
+                document.getElementById('chatCount').textContent = allSessions.length;
+                renderSessionsList();
+            }
+        } catch (e) { /* silencioso */ }
+    };
+
+    async function initDashboard() {
+        await loadStores();
+        loadSessions();
+        loadProducts();
+        loadUsers();
+        setInterval(loadSessions, 5000);
+    }
+    
+    initDashboard();
+    </script>
+</body>
+</html>

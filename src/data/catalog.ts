@@ -1,38 +1,107 @@
-import catalog from './catalog.json';
+import { db } from './connection';
+import { products } from './schema';
+import { eq, ilike, or, and } from 'drizzle-orm';
+import { logger } from '../utils/logger';
 
-export interface Product {
-    id: string;
-    nombre: string;
-    categoria: string;
-    descripcion_corta: string;
-    descripcion_larga: string;
-    precio: number;
-    stock: number;
-    colores?: string[];
-    tallas?: number[];
-    tags: string[];
+export type Product = typeof products.$inferSelect;
+
+function generateId(name: string): string {
+    return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
-/**
- * Busca productos en el catálogo basándose en una consulta de texto.
- * Compara contra el nombre, tags, categoría y descripción.
- */
-export async function searchProducts(query: string): Promise<Product[]> {
-    const lowerQuery = query.toLowerCase();
-    const products = catalog as Product[];
-    
-    return products.filter(p => 
-        p.nombre.toLowerCase().includes(lowerQuery) ||
-        p.tags.some(t => t.toLowerCase().includes(lowerQuery)) ||
-        p.categoria.toLowerCase().includes(lowerQuery) ||
-        p.descripcion_corta.toLowerCase().includes(lowerQuery)
-    ).slice(0, 5); // Retorna máximo 5 coincidencias
+export async function searchProducts(query: string, storeId: string): Promise<Product[]> {
+    const lowerQuery = `%${query.toLowerCase()}%`;
+    try {
+        const rows = await db.query.products.findMany({
+            where: and(
+                eq(products.storeId, storeId),
+                or(
+                    ilike(products.name, lowerQuery),
+                    ilike(products.description, lowerQuery)
+                )
+            ),
+            limit: 5
+        });
+        return rows;
+    } catch (e) {
+        logger.error(`Error searching products: ${e}`);
+        return [];
+    }
 }
 
-/**
- * Obtiene los detalles exactos de un producto dado su ID.
- */
-export async function getProductById(id: string): Promise<Product | null> {
-    const products = catalog as Product[];
-    return products.find(p => p.id === id) || null;
+export async function getProductById(id: string, storeId: string): Promise<Product | null> {
+    try {
+        const row = await db.query.products.findFirst({
+            where: and(eq(products.id, id), eq(products.storeId, storeId))
+        });
+        return row || null;
+    } catch (e) {
+        logger.error(`Error getting product by id: ${e}`);
+        return null;
+    }
+}
+
+export async function getAllProducts(storeId?: string): Promise<Product[]> {
+    try {
+        if (storeId) {
+            return await db.query.products.findMany({ where: eq(products.storeId, storeId) });
+        }
+        return await db.query.products.findMany();
+    } catch (e) {
+        logger.error(`Error getting all products: ${e}`);
+        return [];
+    }
+}
+
+export async function createProduct(product: Partial<Product>, storeId: string): Promise<Product | null> {
+    const id = product.id || generateId(product.name || 'product');
+    try {
+        const [newProduct] = await db.insert(products).values({
+            id,
+            storeId: storeId,
+            name: product.name || '',
+            description: product.description || '',
+            productType: product.productType || 'physical',
+            price: product.price || 0,
+            imageUrl: product.imageUrl || '',
+            checkoutUrl: product.checkoutUrl || ''
+        }).returning();
+        return newProduct;
+    } catch (e) {
+        logger.error(`Error creating product: ${e}`);
+        return null;
+    }
+}
+
+export async function updateProduct(id: string, updates: Partial<Product>, storeId: string): Promise<Product | null> {
+    try {
+        const [updatedProduct] = await db.update(products)
+            .set({
+                name: updates.name,
+                description: updates.description,
+                productType: updates.productType,
+                price: updates.price,
+                imageUrl: updates.imageUrl,
+                checkoutUrl: updates.checkoutUrl
+            })
+            .where(and(eq(products.id, id), eq(products.storeId, storeId)))
+            .returning();
+            
+        return updatedProduct || null;
+    } catch (e) {
+        logger.error(`Error updating product: ${e}`);
+        return null;
+    }
+}
+
+export async function deleteProduct(id: string, storeId: string): Promise<boolean> {
+    try {
+        const result = await db.delete(products)
+            .where(and(eq(products.id, id), eq(products.storeId, storeId)))
+            .returning();
+        return result.length > 0;
+    } catch (e) {
+        logger.error(`Error deleting product: ${e}`);
+        return false;
+    }
 }
