@@ -1,4 +1,3 @@
-import { Router, Request, Response } from 'express';
 import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
 import { logger } from '../utils/logger';
@@ -6,14 +5,13 @@ import { config } from '../config/env';
 import { handleUserMessage } from '../bot/agent';
 import { takePendingImages, PendingImage } from '../bot/tools';
 import { recordHealthEvent } from '../bot/health';
+import { buildDefaultSystemPrompt } from '../bot/prompts';
 import { recordUserActivity } from '../bot/remarketing';
 import { db } from '../data/connection';
 import { stores } from '../data/schema';
 import { eq } from 'drizzle-orm';
 import { getSession, setSessionPause, setOptOut, checkRateLimit, incrementMessageCount } from '../data/database';
 import { isOptOutRequest } from '../utils/optout';
-
-export const whatsappRouter = Router();
 
 // Gestión Multi-Instancia
 const clients = new Map<string, Client>();
@@ -272,7 +270,7 @@ export async function startBotInstance(storeId: string) {
 
             // Encolar mensajes para evitar colisiones
             const currentQueue = messageQueues.get(sessionId) || Promise.resolve();
-            const nextQueue = currentQueue.then(async () => {
+            const nextQueue: Promise<void> = currentQueue.then(async () => {
                 const sessionCheck = await getSession(sessionId);
                 if (sessionCheck?.isPaused) return;
 
@@ -285,17 +283,10 @@ export async function startBotInstance(storeId: string) {
                     where: eq(stores.id, storeId)
                 });
 
-                const defaultPrompt = `Eres Santi, asesor de la tienda. Tu objetivo es vender de forma MUY natural por WhatsApp, como un humano real.
-REGLAS ESTRICTAS:
-1. NUNCA suenes como un robot o call center (nada de "¡Excelente! Me encanta escuchar eso" o "¡Claro que sí!").
-2. Respuestas CORTAS, máximo 2 o 3 líneas. Ve al grano.
-3. Usa máximo 1 emoji por mensaje, o a veces ninguno.
-4. Habla coloquial, fresco, como si le escribieras a un amigo ("Súper", "Dale", "Mira, te cuento...").
-5. GARANTÍA: Todos los productos están en Hotmart, así que SIEMPRE tienen 7 días de garantía de satisfacción o se devuelve el dinero. Úsalo como cierre de venta.
-6. Si te piden algo, búscalo en el catálogo. Si no hay exacto, recomienda algo similar de una vez sin dar tantos rodeos.
-7. PQR y Soporte: Si un cliente tiene una Petición, Queja o Reclamo, dale SIEMPRE este correo de soporte: ${store?.pqrEmail || 'soporte@tienda.com'} y dile que le responderán súper rápido.
-8. Cierra la venta con preguntas simples ("¿Te paso el link?", "¿Te animas con este?").
-9. PAGO: Si el cliente pregunta cómo pagar, pide ayuda con el pago, o tiene problemas para pagar, NO expliques el proceso paso a paso. Usa el tool generate_payment_link y envía ÚNICAMENTE este aviso fijo: "⚠️ Aviso importante sobre el pago: El proceso de pago se realiza en nuestra plataforma segura. Haz clic en el enlace y sigue las instrucciones que aparecen en pantalla. Por tu seguridad, NUNCA compartas los datos de tu tarjeta por este chat. Si tienes problemas con el pago, contáctanos por este mismo medio y te ayudaremos. 🔒"`;
+                const defaultPrompt = buildDefaultSystemPrompt({
+                    storeName: store?.name,
+                    pqrEmail: store?.pqrEmail
+                });
 
                 const aiResponse = await handleUserMessage(
                     sessionId,
@@ -320,7 +311,13 @@ REGLAS ESTRICTAS:
 
                 await incrementMessageCount(sessionId);
                 await recordUserActivity(sessionId);
-            }).catch(err => logger.error(`Error en cola [${storeId}]: ${err.message}`));
+            }).catch(err => logger.error(`Error en cola [${storeId}]: ${err.message}`))
+              .finally(() => {
+                  // Solo se borra si nadie encoló nada detrás: si llegó otro mensaje,
+                  // el Map ya apunta a otra promesa y esa sigue viva. Sin esto, el
+                  // Map crecía con una entrada por cada cliente atendido, para siempre.
+                  if (messageQueues.get(sessionId) === nextQueue) messageQueues.delete(sessionId);
+              });
 
             messageQueues.set(sessionId, nextQueue);
 

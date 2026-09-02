@@ -23,6 +23,87 @@ export function esPrimerContacto(
     return (ahora - ultimo) > horasDeSilencio * 60 * 60 * 1000;
 }
 
+type MensajeChat = OpenAI.Chat.ChatCompletionMessageParam;
+
+/** Un assistant que pidió herramientas no vale nada sin los 'tool' que lo siguen. */
+function pideHerramientas(msg: MensajeChat | undefined): boolean {
+    const m = msg as any;
+    return !!m && m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0;
+}
+
+/**
+ * Recorta el historial sin partir los pares assistant(tool_calls) → tool.
+ * La API devuelve 400 si un 'tool' queda sin su assistant delante, o si un
+ * assistant pidió herramientas cuyos resultados ya no están; y ese 400 dispara
+ * el borrado completo de la conversación más abajo, así que el cliente pierde
+ * el contexto en silencio. Por eso cortamos por bloques atómicos y no por
+ * posición, dejando siempre el system al frente.
+ */
+export function recortarHistorialSeguro(
+    history: MensajeChat[],
+    maxLength: number = MAX_HISTORY_LENGTH
+): MensajeChat[] {
+    if (!Array.isArray(history) || history.length === 0) return [];
+
+    const conSystem = (history[0] as any)?.role === 'system';
+    const system = conSystem ? [history[0]] : [];
+    const resto = conSystem ? history.slice(1) : history.slice();
+
+    // Cada assistant con tool_calls arrastra sus mensajes 'tool': se conservan
+    // o se descartan juntos, nunca a medias.
+    const bloques: MensajeChat[][] = [];
+    for (const msg of resto) {
+        const ultimo = bloques[bloques.length - 1];
+        if ((msg as any).role === 'tool') {
+            // Un 'tool' que ya venía huérfano se descarta: la API lo rechazaría.
+            if (ultimo && pideHerramientas(ultimo[0])) ultimo.push(msg);
+            continue;
+        }
+        bloques.push([msg]);
+    }
+
+    // Un assistant al que le falta algún resultado también provoca 400.
+    const completos = bloques.filter(bloque => {
+        if (!pideHerramientas(bloque[0])) return true;
+        const ids = new Set(bloque.slice(1).map(m => (m as any).tool_call_id));
+        return (bloque[0] as any).tool_calls.every((tc: any) => ids.has(tc.id));
+    });
+
+    const presupuesto = maxLength - system.length;
+    const conservados: MensajeChat[] = [];
+    let total = 0;
+    for (let i = completos.length - 1; i >= 0; i--) {
+        const bloque = completos[i];
+        // El bloque más reciente entra siempre: quedarnos sin el turno actual
+        // sería peor que pasarnos del máximo por un par de mensajes.
+        const esUltimo = i === completos.length - 1;
+        if (!esUltimo && total + bloque.length > presupuesto) break;
+        conservados.unshift(...bloque);
+        total += bloque.length;
+    }
+
+    return [...system, ...conservados];
+}
+
+/**
+ * Lo que se manda al modelo: el contenido multimodal se reduce a texto.
+ * Reenviar las imágenes en base64 en cada iteración dispara el costo en tokens
+ * y revienta con 400 en los modelos de la cascada que no tienen visión. En
+ * memoria el historial sigue guardándose completo.
+ */
+function sanitizarParaModelo(history: MensajeChat[]): MensajeChat[] {
+    return history.map(msg => {
+        if (Array.isArray((msg as any).content)) {
+            const text = (msg as any).content
+                .filter((p: any) => p.type === 'text')
+                .map((p: any) => p.text)
+                .join(' ') || '[imagen]';
+            return { ...msg, content: text };
+        }
+        return msg;
+    }) as MensajeChat[];
+}
+
 const MODEL_CASCADE = [
     { id: 'gemini-3.1-flash-lite-preview', tools: true  },
     { id: 'gemini-2.5-flash-lite',         tools: true  },
@@ -133,22 +214,16 @@ export async function handleUserMessage(
 
     history.push({ role: 'user', content: contentPayload });
 
-    if (history.length > MAX_HISTORY_LENGTH) {
-        history.splice(1, history.length - MAX_HISTORY_LENGTH);
+    // Se reemplaza en sitio para no perder la referencia de `history`, que el
+    // loop de tools sigue usando más abajo.
+    const recortado = recortarHistorialSeguro(history, MAX_HISTORY_LENGTH);
+    if (recortado.length !== history.length) {
+        history.splice(0, history.length, ...recortado);
     }
 
     await saveMemory(sessionId, storeId, senderPhone, history);
 
-    const sanitizedHistory = history.map(msg => {
-        if (Array.isArray((msg as any).content)) {
-            const text = (msg as any).content
-                .filter((p: any) => p.type === 'text')
-                .map((p: any) => p.text)
-                .join(' ') || '[imagen]';
-            return { ...msg, content: text };
-        }
-        return msg;
-    }) as OpenAI.Chat.ChatCompletionMessageParam[];
+    const sanitizedHistory = sanitizarParaModelo(history);
 
     try {
         let { completion: aiResponse, usedTools } = await createWithCascade(apiKeys, baseURL, {
@@ -184,7 +259,7 @@ export async function handleUserMessage(
                 }
 
                 const next = await createWithCascade(apiKeys, baseURL, {
-                    messages: history,
+                    messages: sanitizarParaModelo(history),
                     tools: botTools,
                     tool_choice: 'auto'
                 });
@@ -201,10 +276,7 @@ export async function handleUserMessage(
 
         history.push({ role: 'assistant', content: finalContent });
 
-        let finalHistory = history;
-        if (history.length > MAX_HISTORY_LENGTH) {
-            finalHistory = [history[0], ...history.slice(history.length - MAX_HISTORY_LENGTH + 1)];
-        }
+        const finalHistory = recortarHistorialSeguro(history, MAX_HISTORY_LENGTH);
 
         // Si la IA cerró la conversación, la próxima empieza de cero.
         if (consumeCloseRequest(sessionId)) {

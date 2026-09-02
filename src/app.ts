@@ -7,7 +7,7 @@ import cookieParser from 'cookie-parser';
 import { config } from './config/env';
 import { hashPassword, verifyPassword, isLegacyHash, safeEquals } from './utils/password';
 import { logger } from './utils/logger';
-import { whatsappRouter, initializeWhatsAppClient, sendWhatsAppMessage, stopBotInstance } from './channels/whatsapp';
+import { initializeWhatsAppClient, sendWhatsAppMessage, stopBotInstance } from './channels/whatsapp';
 import { initializeTelegramClients, stopTelegramBot } from './channels/telegram';
 import { startRemarketingCron } from './bot/remarketing';
 import { dashboardRouter } from './routes/dashboard';
@@ -148,9 +148,6 @@ function bootstrap() {
         res.json({ success: true });
     });
 
-    // Rutear las peticiones de WhatsApp (Webhooks suelen ser públicos o validados internamente)
-    app.use('/webhook/whatsapp', whatsappRouter);
-
     // Archivos estáticos públicos (CSS, Login, etc)
     app.use(express.static(path.join(__dirname, '../public')));
 
@@ -170,7 +167,7 @@ function bootstrap() {
     startRemarketingCron((storeId, to, msg) => sendWhatsAppMessage(storeId, to, msg));
 
     // Manejar cierres inesperados (Graceful Shutdown)
-    const shutdown = async () => {
+    const shutdown = async (code: number = 0) => {
         logger.info('🛑 Cerrando el bot...');
         
         try {
@@ -186,16 +183,18 @@ function bootstrap() {
             logger.error('Error durante el cierre:', error);
         }
 
-        process.exit(0);
+        // Salir con 0 tras un error fatal hacía que PM2 y systemd lo tomaran
+        // por un apagado voluntario y NO reiniciaran el proceso.
+        process.exit(code);
     };
 
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', () => shutdown(0));
+    process.on('SIGTERM', () => shutdown(0));
     
     // Capturar errores fatales para no dejar navegadores zombies
     process.on('uncaughtException', async (err) => {
         logger.error('💥 Error Fatal no capturado:', err);
-        await shutdown();
+        await shutdown(1);
     });
     process.on('unhandledRejection', async (reason, promise) => {
         logger.error('💥 Promesa rechazada no capturada:', reason);
@@ -203,7 +202,7 @@ function bootstrap() {
         // Si es un error crítico de Puppeteer, cerramos todo de forma segura
         if (reason && reason.toString().includes('Execution context was destroyed')) {
             logger.error('Reiniciando bots por error de Puppeteer...');
-            await shutdown();
+            await shutdown(1);
         }
     });
 }

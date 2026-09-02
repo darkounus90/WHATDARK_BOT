@@ -34,8 +34,14 @@ export interface HealthSignal {
 export interface StoreHealth {
     storeId: string;
     status: HealthStatus;
+    /** Única acción automática: se corta el saliente proactivo. */
     pauseProactive: boolean;
-    pauseAll: boolean;
+    /**
+     * Requiere intervención humana. NO silencia al bot a propósito: responderle
+     * a quien te escribió sigue siendo lo más seguro que hace, y callarlo dejaría
+     * a los clientes del negocio sin atención justo cuando algo va mal.
+     */
+    requiresAttention: boolean;
     signals: HealthSignal[];
     counts: {
         inbound24h: number;
@@ -164,8 +170,8 @@ export function evaluateHealth(storeId: string, c: HealthCounts): StoreHealth {
         status,
         // Cualquier señal mala frena el saliente proactivo.
         pauseProactive: failureBreached || otherBreaches >= 1,
-        // Solo los fallos de entrega apagan todo: responder sigue siendo seguro.
-        pauseAll: failureBreached,
+        // Los fallos de entrega piden que alguien mire, no que el bot se calle.
+        requiresAttention: failureBreached,
         signals,
         counts: c,
         checkedAt: new Date().toISOString()
