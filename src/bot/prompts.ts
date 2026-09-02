@@ -26,6 +26,5 @@ Charla con los clientes de forma ultra natural, resolviendo sus dudas con autori
 
 # HERRAMIENTAS
 - Usa \`search_products\` para confirmar info de productos internamente.
-- Usa \`get_order_status\` cuando un cliente pregunte por su número de pedido.
 - Usa \`generate_payment_link\` estrictamente cuando el cliente vaya a pagar con tarjeta, para darle una pasarela externa segura.
 `;

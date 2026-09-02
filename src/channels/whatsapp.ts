@@ -1,14 +1,16 @@
 import { Router, Request, Response } from 'express';
-import { Client, LocalAuth } from 'whatsapp-web.js';
+import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
 import { logger } from '../utils/logger';
 import { config } from '../config/env';
 import { handleUserMessage } from '../bot/agent';
+import { takePendingImages, PendingImage } from '../bot/tools';
 import { recordUserActivity } from '../bot/remarketing';
 import { db } from '../data/connection';
 import { stores } from '../data/schema';
 import { eq } from 'drizzle-orm';
-import { getSession, setSessionPause, checkRateLimit, incrementMessageCount } from '../data/database';
+import { getSession, setSessionPause, setOptOut, checkRateLimit, incrementMessageCount } from '../data/database';
+import { isOptOutRequest } from '../utils/optout';
 
 export const whatsappRouter = Router();
 
@@ -17,6 +19,97 @@ const clients = new Map<string, Client>();
 const qrCodes = new Map<string, string>();
 const clientStatus = new Map<string, 'DISCONNECTED' | 'CONNECTING' | 'QR_READY' | 'CONNECTED'>();
 const messageQueues = new Map<string, Promise<void>>();
+
+// Ventana (en segundos) fuera de la cual un mensaje se considera "fantasma"
+// (WhatsApp Web re-sincroniza historial al conectar y dispara eventos de mensajes viejos).
+const MAX_MESSAGE_AGE_SECONDS = 30;
+
+// IDs de mensajes que envio el propio bot, para no confundirlos con respuestas manuales del duenio.
+const botSentMessageIds = new Set<string>();
+
+function markBotMessage(id?: string | null) {
+    if (!id) return;
+    botSentMessageIds.add(id);
+    if (botSentMessageIds.size > 1000) {
+        const oldest = botSentMessageIds.values().next().value;
+        if (oldest) botSentMessageIds.delete(oldest);
+    }
+}
+
+// Envios en vuelo del bot, marcados ANTES de mandar el mensaje: 'message_create'
+// puede dispararse antes de que sendMessage() resuelva y su ID este disponible.
+const pendingBotSends = new Map<string, { count: number; at: number }>();
+
+function sendKey(chatId: string, text: string): string {
+    return `${chatId.replace(/@.*$/, '')}::${(text || '').trim().slice(0, 120)}`;
+}
+
+function markPendingBotSend(chatId: string, text: string) {
+    const key = sendKey(chatId, text);
+    const entry = pendingBotSends.get(key);
+    // Contamos, no marcamos: dos fotos sin pie de foto en el mismo chat
+    // comparten clave, y con un booleano la segunda parecería del duenio.
+    pendingBotSends.set(key, { count: (entry?.count || 0) + 1, at: Date.now() });
+
+    const cutoff = Date.now() - 60_000;
+    for (const [k, v] of pendingBotSends) {
+        if (v.at < cutoff) pendingBotSends.delete(k);
+    }
+}
+
+function consumePendingBotSend(chatId: string, text: string): boolean {
+    const key = sendKey(chatId, text);
+    const entry = pendingBotSends.get(key);
+    if (!entry || entry.count <= 0) return false;
+    if (entry.count === 1) pendingBotSends.delete(key);
+    else pendingBotSends.set(key, { count: entry.count - 1, at: entry.at });
+    return true;
+}
+
+/** Unico punto de salida de mensajes del bot: marca el envio para no auto-pausarse. */
+async function botSend(client: Client, chatId: string, text: string) {
+    markPendingBotSend(chatId, text);
+    const sent = await client.sendMessage(chatId, text);
+    markBotMessage((sent as any)?.id?._serialized);
+    return sent;
+}
+
+/** Envía una foto marcándola como propia, para que no dispare el handover. */
+async function botSendMedia(client: Client, chatId: string, image: PendingImage) {
+    const media = new MessageMedia(image.mimetype, image.base64);
+    markPendingBotSend(chatId, image.caption || '');
+    const sent = await client.sendMessage(chatId, media, { caption: image.caption });
+    markBotMessage((sent as any)?.id?._serialized);
+    return sent;
+}
+
+function messageAgeSeconds(timestamp?: number): number {
+    if (!timestamp) return 0;
+    return (Date.now() / 1000) - timestamp;
+}
+
+/**
+ * Un chat puede venir como @lid (identificador anonimo) o como @c.us (telefono real).
+ * Devolvemos todos los telefonos candidatos para poder ubicar la sesion guardada.
+ */
+async function resolveCandidatePhones(client: Client, chatId: string): Promise<string[]> {
+    const candidates = new Set<string>();
+    const raw = chatId.replace(/@.*$/, '');
+    if (raw) candidates.add(raw);
+
+    try {
+        const contact: any = await client.getContactById(chatId);
+        const idUser = contact?.id?.user;
+        if (idUser && /^\d{7,15}$/.test(idUser)) candidates.add(idUser);
+        if (contact?.number) candidates.add(String(contact.number).replace(/[^0-9]/g, ''));
+        try {
+            const formatted = await contact.getFormattedNumber();
+            if (formatted) candidates.add(String(formatted).replace(/[^0-9]/g, ''));
+        } catch (e) { /* el contacto no expone numero formateado */ }
+    } catch (e) { /* contacto no resoluble, nos quedamos con el id crudo */ }
+
+    return [...candidates].filter(Boolean);
+}
 
 /**
  * Inicializa todos los bots que estén activos en la base de datos
@@ -99,6 +192,14 @@ export async function startBotInstance(storeId: string) {
         try {
             if (message.isStatus || (await message.getChat()).isGroup || message.from.includes('@broadcast')) return;
 
+            // ANTI-MENSAJES FANTASMA: al reconectar, WhatsApp Web reenvia historial.
+            // Solo atendemos mensajes realmente recientes.
+            const age = messageAgeSeconds(message.timestamp);
+            if (age > MAX_MESSAGE_AGE_SECONDS) {
+                logger.warn(`👻 [${storeId}] Mensaje viejo ignorado (${Math.round(age)}s) de ${message.from}`);
+                return;
+            }
+
             // Obtener el número real del contacto (los LIDs @lid no son teléfonos reales)
             let senderPhone = message.from.replace(/@.*$/, '');
             const isLid = message.from.includes('@lid');
@@ -129,7 +230,15 @@ export async function startBotInstance(storeId: string) {
             // Handover Humano
             if (userText.trim().toLowerCase() === '!bot') {
                 await resumeChat(sessionId);
-                await client.sendMessage(message.from, "Bot reactivado correctamente. ¿En qué te puedo ayudar?");
+                await botSend(client, message.from, "Bot reactivado correctamente. ¿En qué te puedo ayudar?");
+                return;
+            }
+
+            // OPT-OUT: se atiende incluso con el chat pausado; es un derecho del cliente.
+            if (isOptOutRequest(userText)) {
+                await setOptOut(sessionId, true);
+                await botSend(client, message.from, "Listo, no te vuelvo a escribir. Si algún día necesitas algo, aquí estoy 🙏");
+                logger.info(`🚫 [${storeId}] ${senderPhone} pidió no recibir más mensajes.`);
                 return;
             }
 
@@ -139,7 +248,7 @@ export async function startBotInstance(storeId: string) {
             // CONTROL DE GASTO: Rate Limit
             const limit = await checkRateLimit(sessionId, 50); // 50 mensajes por día
             if (!limit.allowed) {
-                await client.sendMessage(message.from, "Has alcanzado el límite de mensajes por hoy. Podrás seguir chateando mañana. ¡Gracias!");
+                await botSend(client, message.from, "Has alcanzado el límite de mensajes por hoy. Podrás seguir chateando mañana. ¡Gracias!");
                 return;
             }
 
@@ -180,7 +289,17 @@ REGLAS ESTRICTAS:
                     undefined
                 );
 
-                await client.sendMessage(message.from, aiResponse);
+                await botSend(client, message.from, aiResponse);
+
+                // Fotos que la IA decidió mandar durante esta respuesta.
+                for (const image of takePendingImages(sessionId)) {
+                    try {
+                        await botSendMedia(client, message.from, image);
+                    } catch (mediaError: any) {
+                        logger.error(`Error enviando foto en [${storeId}]: ${mediaError.message}`);
+                    }
+                }
+
                 await incrementMessageCount(sessionId);
                 await recordUserActivity(sessionId);
             }).catch(err => logger.error(`Error en cola [${storeId}]: ${err.message}`));
@@ -189,6 +308,49 @@ REGLAS ESTRICTAS:
 
         } catch (error: any) {
             logger.error(`Error procesando mensaje en [${storeId}]: ${error.message}`);
+        }
+    });
+
+    // HANDOVER AUTOMATICO: si el duenio contesta manualmente desde su celular,
+    // el bot cede el control y se calla en ese chat.
+    client.on('message_create', async (message) => {
+        try {
+            if (!message.fromMe) return;
+
+            // Si el mensaje lo mandamos nosotros mismos, no es una intervencion humana.
+            const outgoingId = (message as any)?.id?._serialized;
+            if (outgoingId && botSentMessageIds.has(outgoingId)) return;
+            if (consumePendingBotSend(message.to || '', message.body || '')) return;
+
+            const target = message.to || '';
+            if (!target || target.includes('@g.us') || target.includes('@broadcast') || message.isStatus) return;
+
+            // No reaccionar al historial re-sincronizado.
+            if (messageAgeSeconds(message.timestamp) > MAX_MESSAGE_AGE_SECONDS) return;
+
+            const phones = await resolveCandidatePhones(client, target);
+            const body = (message.body || '').trim().toLowerCase();
+
+            for (const phone of phones) {
+                const sessionId = `${storeId}_${phone}`;
+                const session = await getSession(sessionId);
+                if (!session) continue;
+
+                if (body === '!bot') {
+                    await resumeChat(sessionId);
+                    await botSend(client, target, "Listo, sigo yo desde aquí 👍");
+                    logger.info(`🤖 [${storeId}] Bot reactivado manualmente en el chat con ${phone}.`);
+                    return;
+                }
+
+                if (!session.isPaused) {
+                    await setSessionPause(sessionId, true);
+                    logger.info(`🙋 [${storeId}] El duenio respondió a ${phone} — bot pausado en ese chat (escribe !bot para reactivarlo).`);
+                }
+                return;
+            }
+        } catch (error: any) {
+            logger.error(`Error en handover automático [${storeId}]: ${error.message}`);
         }
     });
 
@@ -246,13 +408,13 @@ export async function sendWhatsAppMessage(storeId: string, to: string, text: str
 
         const chatId = to.includes('@') ? to : `${to}@c.us`;
         try {
-            await client.sendMessage(chatId, text);
+            await botSend(client, chatId, text);
             logger.info(`✅ Mensaje enviado desde [${storeId}] a ${to}`);
         } catch (sendError: any) {
             if (sendError.message?.includes('LID') && !to.includes('@')) {
                 const resolvedId = await (client as any).getNumberId(to);
                 if (resolvedId) {
-                    await client.sendMessage(resolvedId._serialized, text);
+                    await botSend(client, resolvedId._serialized, text);
                     logger.info(`✅ Mensaje enviado desde [${storeId}] a ${to} (vía LID resuelto)`);
                 } else {
                     throw sendError;

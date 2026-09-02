@@ -1,5 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { handleUserMessage } from '../bot/agent';
+import { takePendingImages } from '../bot/tools';
 import { logger } from '../utils/logger';
 import { stores } from '../data/schema';
 import { eq } from 'drizzle-orm';
@@ -63,6 +64,15 @@ export async function initTelegramBot(storeId: string, token: string) {
 
             if (response) {
                 await bot.sendMessage(chatId, response);
+            }
+
+            // Vaciar siempre la cola: si no, las fotos quedarían colgadas en memoria.
+            for (const image of takePendingImages(sessionId)) {
+                try {
+                    await bot.sendPhoto(chatId, Buffer.from(image.base64, 'base64'), { caption: image.caption });
+                } catch (mediaError: any) {
+                    logger.error(`❌ [${storeId}] Error enviando foto por Telegram: ${mediaError.message}`);
+                }
             }
         } catch (error) {
             logger.error(`❌ [${storeId}] Error en Telegram:`, error);

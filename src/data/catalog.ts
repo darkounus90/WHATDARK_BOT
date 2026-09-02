@@ -53,6 +53,16 @@ export async function getAllProducts(storeId?: string): Promise<Product[]> {
     }
 }
 
+/**
+ * URLs de imagen de un producto. Nuestro schema guarda una sola (imageUrl),
+ * pero devolvemos lista para poder crecer sin cambiar el llamador.
+ */
+export async function getProductImages(id: string, storeId: string): Promise<string[]> {
+    const product = await getProductById(id, storeId);
+    if (!product?.imageUrl?.trim()) return [];
+    return [product.imageUrl.trim()];
+}
+
 export async function createProduct(product: Partial<Product>, storeId: string): Promise<Product | null> {
     const id = product.id || generateId(product.name || 'product');
     try {

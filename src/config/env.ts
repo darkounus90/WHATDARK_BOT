@@ -18,7 +18,23 @@ export const config = {
     META_VERIFY_TOKEN: process.env.META_VERIFY_TOKEN || 'mi_token_secreto_ecommerce',
     NGROK_AUTHTOKEN: process.env.NGROK_AUTHTOKEN || '',
     NGROK_DOMAIN: process.env.NGROK_DOMAIN || '',
-    JWT_SECRET: process.env.JWT_SECRET || 'super-secreto-ai-bot-99'
+    JWT_SECRET: process.env.JWT_SECRET || 'super-secreto-ai-bot-99',
+
+    // --- Remarketing: guardarraíles anti-baneo ---
+    // Meta no banea por la librería que uses, banea por comportamiento:
+    // ráfagas de salientes, mensajes fuera de hora, insistir sin opt-out.
+    REMARKETING_ENABLED: (process.env.REMARKETING_ENABLED || 'true').toLowerCase() !== 'false',
+    REMARKETING_TIMEZONE: process.env.REMARKETING_TIMEZONE || 'America/Bogota',
+    REMARKETING_START_HOUR: Number(process.env.REMARKETING_START_HOUR || 9),   // no antes de las 9am
+    REMARKETING_END_HOUR: Number(process.env.REMARKETING_END_HOUR || 20),      // no después de las 8pm
+    REMARKETING_MIN_HOURS: Number(process.env.REMARKETING_MIN_HOURS || 2),     // esperar mínimo 2h de silencio
+    REMARKETING_MAX_HOURS: Number(process.env.REMARKETING_MAX_HOURS || 20),    // <24h: cabe en la ventana de servicio
+    REMARKETING_MAX_PER_CONTACT: Number(process.env.REMARKETING_MAX_PER_CONTACT || 2),   // tope de por vida
+    REMARKETING_MAX_PER_STORE_DAY: Number(process.env.REMARKETING_MAX_PER_STORE_DAY || 40),
+    REMARKETING_BATCH_SIZE: Number(process.env.REMARKETING_BATCH_SIZE || 10),  // por tick de 10 min
+    REMARKETING_MIN_DELAY_MS: Number(process.env.REMARKETING_MIN_DELAY_MS || 8000),
+    REMARKETING_MAX_DELAY_MS: Number(process.env.REMARKETING_MAX_DELAY_MS || 25000),
+    REMARKETING_OPTOUT_TEXT: process.env.REMARKETING_OPTOUT_TEXT || 'Si no quieres que te escriba más, respóndeme STOP 🙏'
 };
 
 // Validación simple

@@ -1,0 +1,6 @@
+# Normalizar finales de línea: el repo guarda LF siempre.
+# Sin esto, app.ts y dashboard.html aparecen "modificados" enteros al editarlos en Windows.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.sqlite binary

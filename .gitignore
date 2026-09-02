@@ -3,8 +3,10 @@ dist/
 .env
 .DS_Store
 *.log
-data/database.sqlite
-data/
+# Solo la carpeta data/ de la RAIZ (la barra inicial ancla el patron).
+# Sin la barra, git ignoraba tambien src/data/ y dejo fuera del repo
+# schema.ts, connection.ts y database.ts.
+/data/
 
 # WhatsApp Web Session Cache
 .wwebjs_auth/
@@ -21,3 +23,6 @@ skills-lock.json
 headers.txt
 scratch_alter.ts
 test-models.mjs
+
+# Cache de npm (nunca debe ir al repo)
+npm-cache/

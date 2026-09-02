@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { config } from '../config/env';
 import { logger } from '../utils/logger';
-import { botTools, executeTool } from './tools';
+import { botTools, executeTool, consumeCloseRequest, discardPendingImages } from './tools';
 import { getMemory, saveMemory } from '../data/database';
 import { getAllProducts } from '../data/catalog';
 
@@ -141,7 +141,7 @@ export async function handleUserMessage(
                     try {
                         const functionName = toolCall.function.name;
                         const functionArgs = JSON.parse(toolCall.function.arguments);
-                        const functionResult = await executeTool(functionName, functionArgs, storeId, senderPhone);
+                        const functionResult = await executeTool(functionName, functionArgs, storeId, senderPhone, sessionId);
                         history.push({
                             role: 'tool',
                             tool_call_id: toolCall.id,
@@ -180,11 +180,18 @@ export async function handleUserMessage(
             finalHistory = [history[0], ...history.slice(history.length - MAX_HISTORY_LENGTH + 1)];
         }
 
-        await saveMemory(sessionId, storeId, senderPhone, finalHistory);
+        // Si la IA cerró la conversación, la próxima empieza de cero.
+        if (consumeCloseRequest(sessionId)) {
+            await saveMemory(sessionId, storeId, senderPhone, [{ role: 'system', content: enrichedSystemPrompt }]);
+        } else {
+            await saveMemory(sessionId, storeId, senderPhone, finalHistory);
+        }
 
         return finalContent;
 
     } catch (error: any) {
+        // Si la respuesta falló, no queremos mandar después fotos de una conversación que se cayó.
+        discardPendingImages(sessionId);
         logger.error(`Error conversacional sesión ${sessionId}:`, error.message, error.status, JSON.stringify(error.error ?? error.response?.data ?? ''));
         const status = error.status ?? error.statusCode;
         if (status === 400) {
