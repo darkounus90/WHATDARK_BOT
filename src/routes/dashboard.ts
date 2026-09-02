@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getAllSessions, getSession, deleteSession } from '../data/database';
 import { hashPassword } from '../utils/password';
+import { getStoreHealth } from '../bot/health';
 import { getAllProducts, createProduct, updateProduct, deleteProduct } from '../data/catalog';
 import { db } from '../data/connection';
 import { stores } from '../data/schema';
@@ -217,6 +218,19 @@ dashboardRouter.post('/api/bots/start/:storeId', async (req: any, res: Response)
     // Ejecutar en segundo plano para no congelar el Dashboard
     startBotInstance(storeId).catch(err => logger.error(`Error iniciando bot ${storeId}: ${err.message}`));
     res.json({ success: true, message: `Iniciando bot para ${storeId}` });
+});
+
+// ============ SALUD DEL NÚMERO ============
+dashboardRouter.get('/api/health/:storeId', async (req: any, res: Response) => {
+    try {
+        const storeId = req.params.storeId as string;
+        if (!isSuperAdmin(req) && req.user.storeId !== storeId) {
+            return res.status(403).json({ error: 'Prohibido' });
+        }
+        res.json(await getStoreHealth(storeId));
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // ============ SESIONES / CHATS ============

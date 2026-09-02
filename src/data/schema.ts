@@ -43,6 +43,20 @@ export const sessions = pgTable('sessions', {
     lastRemarketingAt: timestamp('last_remarketing_at'),        // cuándo fue el último
 });
 
+/**
+ * Bitácora de señales de salud del número. En whatsapp-web.js no existe una
+ * calificación de calidad como la de la API oficial, así que nos construimos
+ * una aproximación con lo que sí podemos observar.
+ */
+export const healthEvents = pgTable('health_events', {
+    id: text('id').primaryKey(),
+    storeId: text('store_id').references(() => stores.id, { onDelete: 'cascade' }).notNull(),
+    // 'inbound' | 'outbound' | 'send_failed' | 'opt_out'
+    type: text('type').notNull(),
+    sessionId: text('session_id'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 export const users = pgTable('users', {
     id: text('id').primaryKey(),
     storeId: text('store_id').references(() => stores.id, { onDelete: 'cascade' }), // null para superadmin
@@ -57,3 +71,4 @@ export type NewStore = typeof stores.$inferInsert;
 export type Product = typeof products.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type User = typeof users.$inferSelect;
+export type HealthEvent = typeof healthEvents.$inferSelect;

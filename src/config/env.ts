@@ -40,7 +40,23 @@ export const config = {
     REMARKETING_BATCH_SIZE: Number(process.env.REMARKETING_BATCH_SIZE || 10),  // por tick de 10 min
     REMARKETING_MIN_DELAY_MS: Number(process.env.REMARKETING_MIN_DELAY_MS || 8000),
     REMARKETING_MAX_DELAY_MS: Number(process.env.REMARKETING_MAX_DELAY_MS || 25000),
-    REMARKETING_OPTOUT_TEXT: process.env.REMARKETING_OPTOUT_TEXT || 'Si no quieres que te escriba más, respóndeme STOP 🙏'
+    REMARKETING_OPTOUT_TEXT: process.env.REMARKETING_OPTOUT_TEXT || 'Si no quieres que te escriba más, respóndeme STOP 🙏',
+
+    // --- Monitor de salud del número ---
+    // Umbrales a partir de los cuales el bot se frena solo. No evitan un baneo,
+    // pero permiten ver la trayectoria y parar antes de llegar al final.
+    HEALTH_ENABLED: (process.env.HEALTH_ENABLED || 'true').toLowerCase() !== 'false',
+    // Fallos de entrega sobre el total de envíos (24 h). Señal dura: si empieza
+    // a fallar el envío, probablemente ya te están bloqueando.
+    HEALTH_MAX_FAILURE_RATE: Number(process.env.HEALTH_MAX_FAILURE_RATE || 0.15),
+    // Cuánta gente pide STOP sobre el total de contactos (7 días).
+    HEALTH_MAX_OPTOUT_RATE: Number(process.env.HEALTH_MAX_OPTOUT_RATE || 0.08),
+    // Cuánto habla el bot por cada mensaje que recibe (24 h).
+    HEALTH_MAX_OUTBOUND_RATIO: Number(process.env.HEALTH_MAX_OUTBOUND_RATIO || 2.5),
+    // Qué proporción de los seguimientos consigue respuesta (7 días).
+    HEALTH_MIN_PROACTIVE_REPLY_RATE: Number(process.env.HEALTH_MIN_PROACTIVE_REPLY_RATE || 0.15),
+    // Días de bitácora que se conservan.
+    HEALTH_RETENTION_DAYS: Number(process.env.HEALTH_RETENTION_DAYS || 30)
 };
 
 // --- Validación de arranque ---

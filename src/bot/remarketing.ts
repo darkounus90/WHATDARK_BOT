@@ -4,6 +4,7 @@ import { sessions, stores } from '../data/schema';
 import { eq, and, lte, gte, lt, sql } from 'drizzle-orm';
 import { getMemory, saveMemory, countRemarketingLast24h } from '../data/database';
 import { getAllProducts } from '../data/catalog';
+import { canSendProactive, pruneHealthEvents } from './health';
 import OpenAI from 'openai';
 import { config } from '../config/env';
 
@@ -117,6 +118,8 @@ async function runRemarketingTick(sendFunc: (storeId: string, to: string, msg: s
     tickRunning = true;
 
     try {
+        void pruneHealthEvents();
+
         if (!isWithinSendingHours()) return;
 
         const now = Date.now();
@@ -159,6 +162,15 @@ async function runRemarketingTick(sendFunc: (storeId: string, to: string, msg: s
 
                 const store = await db.query.stores.findFirst({ where: eq(stores.id, storeId) });
                 if (!store || !store.isActive) continue;
+
+                // Si la salud del número se está deteriorando, lo primero que se
+                // apaga es el saliente proactivo. Responder sigue permitido.
+                const salud = await canSendProactive(storeId);
+                if (!salud.allowed) {
+                    logger.warn(`🩺 [${storeId}] Remarketing suspendido por ${salud.reason}.`);
+                    storeUsage.set(storeId, Number.MAX_SAFE_INTEGER);
+                    continue;
+                }
 
                 // Tope diario por tienda (se consulta a la BD, sobrevive reinicios).
                 let used = storeUsage.get(storeId);

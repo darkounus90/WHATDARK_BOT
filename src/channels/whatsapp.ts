@@ -5,6 +5,7 @@ import { logger } from '../utils/logger';
 import { config } from '../config/env';
 import { handleUserMessage } from '../bot/agent';
 import { takePendingImages, PendingImage } from '../bot/tools';
+import { recordHealthEvent } from '../bot/health';
 import { recordUserActivity } from '../bot/remarketing';
 import { db } from '../data/connection';
 import { stores } from '../data/schema';
@@ -67,20 +68,34 @@ function consumePendingBotSend(chatId: string, text: string): boolean {
 }
 
 /** Unico punto de salida de mensajes del bot: marca el envio para no auto-pausarse. */
-async function botSend(client: Client, chatId: string, text: string) {
+async function botSend(client: Client, storeId: string, chatId: string, text: string) {
     markPendingBotSend(chatId, text);
-    const sent = await client.sendMessage(chatId, text);
-    markBotMessage((sent as any)?.id?._serialized);
-    return sent;
+    try {
+        const sent = await client.sendMessage(chatId, text);
+        markBotMessage((sent as any)?.id?._serialized);
+        recordHealthEvent(storeId, 'outbound');
+        return sent;
+    } catch (error) {
+        // Un envío que falla suele significar que del otro lado te bloquearon.
+        // Es la señal más temprana de que el número va camino al baneo.
+        recordHealthEvent(storeId, 'send_failed');
+        throw error;
+    }
 }
 
 /** Envía una foto marcándola como propia, para que no dispare el handover. */
-async function botSendMedia(client: Client, chatId: string, image: PendingImage) {
+async function botSendMedia(client: Client, storeId: string, chatId: string, image: PendingImage) {
     const media = new MessageMedia(image.mimetype, image.base64);
     markPendingBotSend(chatId, image.caption || '');
-    const sent = await client.sendMessage(chatId, media, { caption: image.caption });
-    markBotMessage((sent as any)?.id?._serialized);
-    return sent;
+    try {
+        const sent = await client.sendMessage(chatId, media, { caption: image.caption });
+        markBotMessage((sent as any)?.id?._serialized);
+        recordHealthEvent(storeId, 'outbound');
+        return sent;
+    } catch (error) {
+        recordHealthEvent(storeId, 'send_failed');
+        throw error;
+    }
 }
 
 function messageAgeSeconds(timestamp?: number): number {
@@ -227,17 +242,20 @@ export async function startBotInstance(storeId: string) {
             const userText = message.body;
             const sessionId = `${storeId}_${senderPhone}`;
 
+            recordHealthEvent(storeId, 'inbound', sessionId);
+
             // Handover Humano
             if (userText.trim().toLowerCase() === '!bot') {
                 await resumeChat(sessionId);
-                await botSend(client, message.from, "Bot reactivado correctamente. ¿En qué te puedo ayudar?");
+                await botSend(client, storeId, message.from, "Bot reactivado correctamente. ¿En qué te puedo ayudar?");
                 return;
             }
 
             // OPT-OUT: se atiende incluso con el chat pausado; es un derecho del cliente.
             if (isOptOutRequest(userText)) {
                 await setOptOut(sessionId, true);
-                await botSend(client, message.from, "Listo, no te vuelvo a escribir. Si algún día necesitas algo, aquí estoy 🙏");
+                recordHealthEvent(storeId, 'opt_out', sessionId);
+                await botSend(client, storeId, message.from, "Listo, no te vuelvo a escribir. Si algún día necesitas algo, aquí estoy 🙏");
                 logger.info(`🚫 [${storeId}] ${senderPhone} pidió no recibir más mensajes.`);
                 return;
             }
@@ -248,7 +266,7 @@ export async function startBotInstance(storeId: string) {
             // CONTROL DE GASTO: Rate Limit
             const limit = await checkRateLimit(sessionId, 50); // 50 mensajes por día
             if (!limit.allowed) {
-                await botSend(client, message.from, "Has alcanzado el límite de mensajes por hoy. Podrás seguir chateando mañana. ¡Gracias!");
+                await botSend(client, storeId, message.from, "Has alcanzado el límite de mensajes por hoy. Podrás seguir chateando mañana. ¡Gracias!");
                 return;
             }
 
@@ -289,12 +307,12 @@ REGLAS ESTRICTAS:
                     undefined
                 );
 
-                await botSend(client, message.from, aiResponse);
+                await botSend(client, storeId, message.from, aiResponse);
 
                 // Fotos que la IA decidió mandar durante esta respuesta.
                 for (const image of takePendingImages(sessionId)) {
                     try {
-                        await botSendMedia(client, message.from, image);
+                        await botSendMedia(client, storeId, message.from, image);
                     } catch (mediaError: any) {
                         logger.error(`Error enviando foto en [${storeId}]: ${mediaError.message}`);
                     }
@@ -338,7 +356,7 @@ REGLAS ESTRICTAS:
 
                 if (body === '!bot') {
                     await resumeChat(sessionId);
-                    await botSend(client, target, "Listo, sigo yo desde aquí 👍");
+                    await botSend(client, storeId, target, "Listo, sigo yo desde aquí 👍");
                     logger.info(`🤖 [${storeId}] Bot reactivado manualmente en el chat con ${phone}.`);
                     return;
                 }
@@ -408,13 +426,13 @@ export async function sendWhatsAppMessage(storeId: string, to: string, text: str
 
         const chatId = to.includes('@') ? to : `${to}@c.us`;
         try {
-            await botSend(client, chatId, text);
+            await botSend(client, storeId, chatId, text);
             logger.info(`✅ Mensaje enviado desde [${storeId}] a ${to}`);
         } catch (sendError: any) {
             if (sendError.message?.includes('LID') && !to.includes('@')) {
                 const resolvedId = await (client as any).getNumberId(to);
                 if (resolvedId) {
-                    await botSend(client, resolvedId._serialized, text);
+                    await botSend(client, storeId, resolvedId._serialized, text);
                     logger.info(`✅ Mensaje enviado desde [${storeId}] a ${to} (vía LID resuelto)`);
                 } else {
                     throw sendError;
