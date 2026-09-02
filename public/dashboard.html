@@ -1489,11 +1489,16 @@
         document.getElementById('sId').disabled = true;
         document.getElementById('sNombre').value = s.name;
         document.getElementById('sPrompt').value = s.systemPrompt || '';
-        document.getElementById('sApiKey').value = s.openaiApiKey || '';
+        // El servidor ya no manda los secretos al navegador, solo si existen.
+        // Campo vacío = conservar el valor guardado.
+        document.getElementById('sApiKey').value = '';
+        document.getElementById('sApiKey').placeholder = s.hasOpenaiApiKey ? '•••••••• guardada · vacío = no cambiar' : 'sk-...';
         document.getElementById('sPhoneNumberId').value = s.whatsappPhoneNumberId || '';
-        document.getElementById('sAccessToken').value = s.whatsappAccessToken || '';
+        document.getElementById('sAccessToken').value = '';
+        document.getElementById('sAccessToken').placeholder = s.hasWhatsappAccessToken ? '•••••••• guardado · vacío = no cambiar' : 'EAABXHSsk...';
         document.getElementById('sPqrEmail').value = s.pqrEmail || '';
-        document.getElementById('sTelegramToken').value = s.telegramToken || '';
+        document.getElementById('sTelegramToken').value = '';
+        document.getElementById('sTelegramToken').placeholder = s.hasTelegramToken ? '•••••••• guardado · vacío = no cambiar' : '7123456789:AAH...';
         document.getElementById('sTelegramActive').checked = !!s.telegramBotActive;
         document.getElementById('btnSaveStore').textContent = 'Guardar Cambios';
         document.getElementById('storeModal').classList.remove('hidden');
@@ -1507,10 +1512,13 @@
         document.getElementById('sNombre').value = '';
         document.getElementById('sPrompt').value = '';
         document.getElementById('sApiKey').value = '';
+        document.getElementById('sApiKey').placeholder = 'sk-...';
         document.getElementById('sPhoneNumberId').value = '';
         document.getElementById('sAccessToken').value = '';
+        document.getElementById('sAccessToken').placeholder = 'EAABXHSsk...';
         document.getElementById('sPqrEmail').value = '';
         document.getElementById('sTelegramToken').value = '';
+        document.getElementById('sTelegramToken').placeholder = '7123456789:AAH...';
         document.getElementById('sTelegramActive').checked = false;
         document.getElementById('btnSaveStore').textContent = 'Guardar y Crear';
         document.getElementById('storeModal').classList.remove('hidden');
@@ -1528,11 +1536,11 @@
             const body = {
                 id, name,
                 systemPrompt,
-                openaiApiKey: document.getElementById('sApiKey').value.trim() || null,
+                openaiApiKey: document.getElementById('sApiKey').value.trim() || undefined,
                 whatsappPhoneNumberId: document.getElementById('sPhoneNumberId').value.trim() || null,
-                whatsappAccessToken: document.getElementById('sAccessToken').value.trim() || null,
+                whatsappAccessToken: document.getElementById('sAccessToken').value.trim() || undefined,
                 pqrEmail: document.getElementById('sPqrEmail').value.trim() || null,
-                telegramToken: document.getElementById('sTelegramToken').value.trim() || null,
+                telegramToken: document.getElementById('sTelegramToken').value.trim() || undefined,
                 telegramBotActive: document.getElementById('sTelegramActive').checked,
                 isActive: true
             };

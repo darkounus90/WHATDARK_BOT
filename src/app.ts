@@ -2,10 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import { config } from './config/env';
+import { hashPassword, verifyPassword, isLegacyHash, safeEquals } from './utils/password';
 import { logger } from './utils/logger';
 import { whatsappRouter, initializeWhatsAppClient, sendWhatsAppMessage, stopBotInstance } from './channels/whatsapp';
 import { initializeTelegramClients, stopTelegramBot } from './channels/telegram';
@@ -20,6 +20,11 @@ function bootstrap() {
     logger.info(`Iniciando AI Bot para Ecommerce: ${config.STORE_NAME}`);
     
     const app = express();
+
+    // Cuántos proxies hay delante. Sin esto, detrás de ngrok o un reverse proxy
+    // todas las peticiones parecen venir de la misma IP y el rate limit del
+    // login castigaría a todo el mundo por igual.
+    app.set('trust proxy', config.TRUST_PROXY);
     
     // 1. Seguridad Básica (Headers)
     app.use(helmet({
@@ -37,6 +42,24 @@ function bootstrap() {
         message: { error: 'Demasiadas peticiones desde esta IP' }
     });
     app.use('/dashboard/api', limiter);
+
+    // El limiter de arriba solo cubre /dashboard/api: el login quedaba
+    // completamente abierto a fuerza bruta. Este lo cierra.
+    const loginLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        limit: 10,
+        standardHeaders: true,
+        legacyHeaders: false,
+        skipSuccessfulRequests: true,
+        message: { error: 'Demasiados intentos fallidos. Espera unos minutos.' }
+    });
+
+    const cookieOptions = {
+        httpOnly: true as const,
+        sameSite: 'lax' as const,
+        secure: config.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000
+    };
 
     // --- SISTEMA DE AUTENTICACIÓN POR COOKIE/JWT ---
     
@@ -67,51 +90,55 @@ function bootstrap() {
     };
 
     // Ruta de Login
-    app.post('/api/auth/login', async (req, res) => {
-        try {
-            const { username, password } = req.body;
-            if (!username || !password) {
-                return res.status(400).json({ error: 'Faltan credenciales' });
-            }
+    app.post('/api/auth/login', loginLimiter, async (req, res) => {
+        const { username, password } = req.body || {};
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Faltan credenciales' });
+        }
 
-            // Fallback a superadmin del .env si la tabla está vacía o es admin root
-            if (username === config.DASHBOARD_USER && password === config.DASHBOARD_PASSWORD) {
+        try {
+            // Superadmin definido en el .env
+            if (safeEquals(username, config.DASHBOARD_USER) && safeEquals(password, config.DASHBOARD_PASSWORD)) {
                 const token = jwt.sign({ user: username, role: 'superadmin', storeId: null }, config.JWT_SECRET, { expiresIn: '24h' });
-                res.cookie('auth_token', token, {
-                    httpOnly: true,
-                    sameSite: 'lax',
-                    maxAge: 24 * 60 * 60 * 1000
-                });
+                res.cookie('auth_token', token, cookieOptions);
                 return res.json({ success: true });
             }
 
-            // Buscar en BD
             const user = await db.query.users.findFirst({
                 where: eq(users.username, username)
             });
 
-            if (user) {
-                // Implementación simple de hash comparativo (puedes mejorar esto con bcrypt después)
-                const hashedPass = crypto.createHash('sha256').update(password).digest('hex');
-                if (user.passwordHash === hashedPass || user.passwordHash === password) {
-                    const token = jwt.sign({ 
-                        user: user.username, 
-                        role: user.role, 
-                        storeId: user.storeId 
-                    }, config.JWT_SECRET, { expiresIn: '24h' });
-                    
-                    res.cookie('auth_token', token, {
-                        httpOnly: true,
-                        sameSite: 'lax',
-                        maxAge: 24 * 60 * 60 * 1000
-                    });
-                    return res.json({ success: true });
+            // verifyPattern acepta scrypt y, de forma transitoria, el SHA-256
+            // viejo. Lo que NO acepta es una contraseña en texto plano, que es
+            // lo que hacía la versión anterior con `user.passwordHash === password`.
+            if (user && verifyPassword(password, user.passwordHash)) {
+
+                // Migración transparente: el primer login con hash viejo lo reescribe.
+                if (isLegacyHash(user.passwordHash)) {
+                    try {
+                        await db.update(users)
+                            .set({ passwordHash: hashPassword(password) })
+                            .where(eq(users.id, user.id));
+                        logger.info(`🔐 Contraseña de ${user.username} migrada a scrypt.`);
+                    } catch (migrationError) {
+                        logger.error('No se pudo migrar el hash de contraseña:', migrationError);
+                    }
                 }
+
+                const token = jwt.sign({
+                    user: user.username,
+                    role: user.role,
+                    storeId: user.storeId
+                }, config.JWT_SECRET, { expiresIn: '24h' });
+
+                res.cookie('auth_token', token, cookieOptions);
+                return res.json({ success: true });
             }
         } catch (e) {
             logger.error('Error en el login:', e);
         }
 
+        logger.warn(`🔒 Login fallido para "${String(username).slice(0, 40)}"`);
         res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
     });
 

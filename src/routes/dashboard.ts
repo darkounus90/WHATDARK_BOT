@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { getAllSessions, deleteSession } from '../data/database';
+import { getAllSessions, getSession, deleteSession } from '../data/database';
+import { hashPassword } from '../utils/password';
 import { getAllProducts, createProduct, updateProduct, deleteProduct } from '../data/catalog';
 import { db } from '../data/connection';
 import { stores } from '../data/schema';
@@ -11,9 +12,31 @@ import OpenAI from 'openai';
 import { config } from '../config/env';
 import { logger } from '../utils/logger';
 import { users } from '../data/schema';
-import crypto from 'crypto';
 
 export const dashboardRouter = Router();
+
+/**
+ * Quita los secretos antes de mandar una tienda al navegador.
+ * Antes se devolvía la fila completa: el panel recibía en claro la API key de
+ * OpenAI, el token de WhatsApp y el de Telegram — y el superadmin, los de todas.
+ */
+function sanitizeStore(store: any) {
+    if (!store) return store;
+    const { openaiApiKey, whatsappAccessToken, telegramToken, ...safe } = store;
+    return {
+        ...safe,
+        hasOpenaiApiKey: !!openaiApiKey,
+        hasWhatsappAccessToken: !!whatsappAccessToken,
+        hasTelegramToken: !!telegramToken
+    };
+}
+
+/** Vacío = "no tocar"; null explícito = "borrar". */
+function secretoEntrante(valor: any): string | null | undefined {
+    if (valor === null) return null;
+    if (typeof valor === 'string' && valor.trim()) return valor.trim();
+    return undefined;
+}
 
 // Middleware de roles
 const isSuperAdmin = (req: any) => req.user?.role === 'superadmin' || req.user?.user === config.DASHBOARD_USER;
@@ -43,8 +66,12 @@ dashboardRouter.post('/api/users', checkSuperAdmin, async (req: Request, res: Re
         const { username, password, storeId, role } = req.body;
         if (!username || !password) return res.status(400).json({ error: 'Usuario y contraseña obligatorios' });
         
-        const hashedPass = crypto.createHash('sha256').update(password).digest('hex');
-        
+        if (String(password).length < 8) {
+            return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+        }
+
+        const hashedPass = hashPassword(password);
+
         const newUser = await db.insert(users).values({
             id: Date.now().toString(),
             username,
@@ -76,10 +103,10 @@ dashboardRouter.get('/api/stores', async (req: any, res: Response) => {
     try {
         if (isSuperAdmin(req)) {
             const allStores = await db.query.stores.findMany();
-            res.json(allStores);
+            res.json(allStores.map(sanitizeStore));
         } else {
             const store = await db.query.stores.findMany({ where: eq(stores.id, req.user.storeId) });
-            res.json(store);
+            res.json(store.map(sanitizeStore));
         }
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -105,7 +132,7 @@ dashboardRouter.post('/api/stores', checkSuperAdmin, async (req: Request, res: R
             isActive: true
         }).returning();
 
-        res.status(201).json(newStore[0]);
+        res.status(201).json(sanitizeStore(newStore[0]));
     } catch (error: any) {
         res.status(400).json({ error: error.message });
     }
@@ -141,17 +168,26 @@ dashboardRouter.put('/api/stores/:id', async (req: any, res: Response) => {
         if (!name) return res.status(400).json({ error: 'El nombre es obligatorio' });
         if (!systemPrompt) return res.status(400).json({ error: 'El System Prompt es obligatorio' });
 
+        // Como los secretos ya no viajan al navegador, el formulario los manda
+        // vacíos. Si sobrescribiéramos con vacío, cada guardado borraría las claves.
+        const openaiKey = secretoEntrante(openaiApiKey);
+        const tgToken = secretoEntrante(telegramToken);
+        const waToken = secretoEntrante(whatsappAccessToken);
+
         const updated = await db.update(stores)
             .set({
                 name,
                 systemPrompt,
-                openaiApiKey: openaiApiKey || null,
-                pqrEmail: pqrEmail || null,
-                telegramToken: telegramToken || null,
-                telegramBotActive: !!telegramBotActive,
-                isActive,
+                // Solo se tocan los campos que vienen en la petición. applyAiPrompt()
+                // manda un PUT parcial de 4 campos y estaba borrando el correo de
+                // PQR y desactivando Telegram sin querer.
+                ...(pqrEmail !== undefined && { pqrEmail: pqrEmail || null }),
+                ...(telegramBotActive !== undefined && { telegramBotActive: !!telegramBotActive }),
+                ...(isActive !== undefined && { isActive }),
+                ...(openaiKey !== undefined && { openaiApiKey: openaiKey }),
+                ...(tgToken !== undefined && { telegramToken: tgToken }),
+                ...(waToken !== undefined && { whatsappAccessToken: waToken }),
                 ...(whatsappPhoneNumberId !== undefined && { whatsappPhoneNumberId: whatsappPhoneNumberId || null }),
-                ...(whatsappAccessToken !== undefined && { whatsappAccessToken: whatsappAccessToken || null }),
             })
             .where(eq(stores.id, id))
             .returning();
@@ -160,7 +196,7 @@ dashboardRouter.put('/api/stores/:id', async (req: any, res: Response) => {
             return res.status(404).json({ error: 'Tienda no encontrada' });
         }
 
-        res.json(updated[0]);
+        res.json(sanitizeStore(updated[0]));
     } catch (error: any) {
         res.status(400).json({ error: error.message });
     }
@@ -194,6 +230,15 @@ dashboardRouter.get('/api/sessions', async (req: any, res: Response) => {
 dashboardRouter.delete('/api/sessions/:sessionId', async (req: any, res: Response) => {
     try {
         const sessionId = req.params.sessionId as string;
+
+        // Sin esta verificación, el dueño de una tienda podía borrar las
+        // conversaciones de cualquier otra con solo conocer el sessionId.
+        const session = await getSession(sessionId);
+        if (!session) return res.status(404).json({ error: 'Conversación no encontrada' });
+        if (!isSuperAdmin(req) && session.storeId !== req.user.storeId) {
+            return res.status(403).json({ error: 'Esa conversación no pertenece a tu tienda' });
+        }
+
         await deleteSession(sessionId);
         res.json({ success: true });
     } catch (error: any) {
@@ -448,7 +493,15 @@ dashboardRouter.post('/api/reply', async (req: any, res: Response) => {
         }
         
         if (sessionId) {
-            pauseChat(sessionId);
+            // Mismo agujero que en DELETE: pausar la sesión de otra tienda.
+            const session = await getSession(sessionId);
+            if (!session) {
+                return res.status(404).json({ error: 'Conversación no encontrada' });
+            }
+            if (session.storeId !== storeId) {
+                return res.status(403).json({ error: 'Esa conversación no pertenece a la tienda indicada' });
+            }
+            await pauseChat(sessionId);
         }
         
         await sendWhatsAppMessage(storeId, phone, message);

@@ -11,14 +11,20 @@ export const config = {
     OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     STORE_NAME: process.env.STORE_NAME || 'nuestro ecommerce',
     PORT: process.env.PORT || 3000,
+    NODE_ENV: process.env.NODE_ENV || 'development',
     DASHBOARD_USER: process.env.DASHBOARD_USER || 'admin',
-    DASHBOARD_PASSWORD: process.env.DASHBOARD_PASSWORD || 'admin123',
+    // Sin valor por defecto a propósito: un default conocido es una puerta abierta.
+    DASHBOARD_PASSWORD: process.env.DASHBOARD_PASSWORD || '',
+    // Saltos de proxy en los que confiar para obtener la IP real del cliente.
+    // Detrás de ngrok o un reverse proxy, poner 1. En 0, el rate limit del
+    // login ve una sola IP para todo el mundo.
+    TRUST_PROXY: Number(process.env.TRUST_PROXY || 0),
     META_ACCESS_TOKEN: process.env.META_ACCESS_TOKEN || '',
     META_PHONE_ID: process.env.META_PHONE_ID || '',
-    META_VERIFY_TOKEN: process.env.META_VERIFY_TOKEN || 'mi_token_secreto_ecommerce',
+    META_VERIFY_TOKEN: process.env.META_VERIFY_TOKEN || '',
     NGROK_AUTHTOKEN: process.env.NGROK_AUTHTOKEN || '',
     NGROK_DOMAIN: process.env.NGROK_DOMAIN || '',
-    JWT_SECRET: process.env.JWT_SECRET || 'super-secreto-ai-bot-99',
+    JWT_SECRET: process.env.JWT_SECRET || '',
 
     // --- Remarketing: guardarraíles anti-baneo ---
     // Meta no banea por la librería que uses, banea por comportamiento:
@@ -36,6 +42,41 @@ export const config = {
     REMARKETING_MAX_DELAY_MS: Number(process.env.REMARKETING_MAX_DELAY_MS || 25000),
     REMARKETING_OPTOUT_TEXT: process.env.REMARKETING_OPTOUT_TEXT || 'Si no quieres que te escriba más, respóndeme STOP 🙏'
 };
+
+// --- Validación de arranque ---
+// Estos valores protegen las claves de API de todos tus clientes. Si faltan o
+// son un default conocido, el proceso no arranca: es preferible a quedar abierto.
+const DEFAULTS_INSEGUROS = [
+    'super-secreto-ai-bot-99', 'admin123', 'mi_token_secreto_ecommerce',
+    'changeme', 'secret', 'password', '123456'
+];
+
+const errores: string[] = [];
+
+if (!config.JWT_SECRET) {
+    errores.push('JWT_SECRET no está definido en el .env');
+} else if (DEFAULTS_INSEGUROS.includes(config.JWT_SECRET)) {
+    errores.push('JWT_SECRET usa un valor por defecto conocido; cualquiera puede falsificar sesiones');
+} else if (config.JWT_SECRET.length < 32) {
+    errores.push('JWT_SECRET es demasiado corto (mínimo 32 caracteres)');
+}
+
+if (!config.DASHBOARD_PASSWORD) {
+    errores.push('DASHBOARD_PASSWORD no está definido en el .env');
+} else if (DEFAULTS_INSEGUROS.includes(config.DASHBOARD_PASSWORD)) {
+    errores.push('DASHBOARD_PASSWORD usa un valor por defecto conocido');
+}
+
+if (errores.length > 0) {
+    console.error('\n❌ El bot no puede arrancar por configuración insegura:\n');
+    for (const e of errores) console.error(`   • ${e}`);
+    console.error('\n   Genera un secreto fuerte con:  node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'hex\'))"\n');
+    process.exit(1);
+}
+
+if (config.DASHBOARD_PASSWORD.length < 12) {
+    console.warn('⚠️  DASHBOARD_PASSWORD tiene menos de 12 caracteres. Esa cuenta ve las claves de API de todas las tiendas.');
+}
 
 // Validación simple
 if (!config.OPENAI_API_KEY) {
