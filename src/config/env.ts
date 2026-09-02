@@ -56,7 +56,18 @@ export const config = {
     // Qué proporción de los seguimientos consigue respuesta (7 días).
     HEALTH_MIN_PROACTIVE_REPLY_RATE: Number(process.env.HEALTH_MIN_PROACTIVE_REPLY_RATE || 0.15),
     // Días de bitácora que se conservan.
-    HEALTH_RETENTION_DAYS: Number(process.env.HEALTH_RETENTION_DAYS || 30)
+    HEALTH_RETENTION_DAYS: Number(process.env.HEALTH_RETENTION_DAYS || 30),
+
+    // --- Presentación en el primer contacto ---
+    // El cliente suele llegar desde la web, un anuncio o una redirección desde
+    // otro número: no sabe quién le está escribiendo. La instrucción se inyecta
+    // en el prompt para que el bot se presente Y responda en el mismo mensaje,
+    // en vez de soltar un saludo robótico aparte.
+    FIRST_CONTACT_ENABLED: (process.env.FIRST_CONTACT_ENABLED || 'true').toLowerCase() !== 'false',
+    // Tras cuántas horas de silencio se vuelve a presentar.
+    FIRST_CONTACT_AFTER_HOURS: Number(process.env.FIRST_CONTACT_AFTER_HOURS || 24),
+    FIRST_CONTACT_INSTRUCTION: process.env.FIRST_CONTACT_INSTRUCTION ||
+        'CONTEXTO: es el primer mensaje de este cliente. Probablemente llegó desde la web, un anuncio o el otro número del negocio, así que NO sabe quién le está escribiendo y puede desconfiar. Empieza diciendo en pocas palabras de qué negocio eres, con naturalidad, y sigue de inmediato con lo que te preguntó — todo en el mismo mensaje, sin saludo largo ni presentación formal.'
 };
 
 // --- Validación de arranque ---

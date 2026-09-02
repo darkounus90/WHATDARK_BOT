@@ -2,10 +2,26 @@ import OpenAI from 'openai';
 import { config } from '../config/env';
 import { logger } from '../utils/logger';
 import { botTools, executeTool, consumeCloseRequest, discardPendingImages } from './tools';
-import { getMemory, saveMemory } from '../data/database';
+import { getMemory, saveMemory, getSession } from '../data/database';
 import { getAllProducts } from '../data/catalog';
 
 const MAX_HISTORY_LENGTH = 15;
+
+/**
+ * ¿Hay que presentarse? Puro, para poder probarlo.
+ * Es primer contacto si nunca hubo sesión, o si lleva suficiente tiempo en
+ * silencio como para que ya no recuerde con quién estaba hablando.
+ */
+export function esPrimerContacto(
+    updatedAt: Date | string | null | undefined,
+    ahora: number = Date.now(),
+    horasDeSilencio: number = config.FIRST_CONTACT_AFTER_HOURS
+): boolean {
+    if (!updatedAt) return true;
+    const ultimo = new Date(updatedAt).getTime();
+    if (!Number.isFinite(ultimo)) return true;
+    return (ahora - ultimo) > horasDeSilencio * 60 * 60 * 1000;
+}
 
 const MODEL_CASCADE = [
     { id: 'gemini-3.1-flash-lite-preview', tools: true  },
@@ -87,7 +103,17 @@ export async function handleUserMessage(
 ): Promise<string> {
 
     const catalogContext = await buildCatalogContext(storeId);
-    const enrichedSystemPrompt = systemPrompt + catalogContext;
+    let enrichedSystemPrompt = systemPrompt + catalogContext;
+
+    // La instrucción vive solo en el prompt de este turno: al siguiente mensaje
+    // el prompt se regenera sin ella, así que no se vuelve a presentar.
+    if (config.FIRST_CONTACT_ENABLED) {
+        const sesionPrevia = await getSession(sessionId);
+        if (esPrimerContacto(sesionPrevia?.updatedAt)) {
+            enrichedSystemPrompt += `\n\n${config.FIRST_CONTACT_INSTRUCTION}`;
+            logger.info(`👋 [${storeId}] Primer contacto con ${senderPhone}: el bot se presenta.`);
+        }
+    }
 
     const history = await getOrCreateSession(sessionId, enrichedSystemPrompt);
 
